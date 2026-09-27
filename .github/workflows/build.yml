@@ -1,0 +1,38 @@
+name: Gerar IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Gerar projeto Xcode
+        run: xcodegen generate
+
+      - name: Compilar (sem assinatura, o AltStore assina)
+        run: |
+          xcodebuild -project Rotina.xcodeproj -scheme Rotina \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -80; tail -30 build.log; exit 1; }
+
+      - name: Empacotar .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Rotina.app Payload/
+          zip -qry LBO-Rotina.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LBO-Rotina-ipa
+          path: LBO-Rotina.ipa
