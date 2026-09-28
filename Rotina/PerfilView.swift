@@ -14,6 +14,9 @@ struct PerfilView: View {
     @State private var resultadoTeste: String?
     @State private var apagarTudo = false
     @State private var notificacoesLigadas = true
+    @State private var mostrarIA = false
+    @AppStorage("alarmeTarefas") private var alarme = true
+    @State private var alarmeAutorizado = Alarmes.autorizado
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
 
@@ -35,6 +38,7 @@ struct PerfilView: View {
             .navigationTitle("Perfil")
             .task {
                 notificacoesLigadas = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .authorized
+                alarmeAutorizado = Alarmes.autorizado
             }
             .confirmationDialog("Apagar todas as tarefas, hábitos e XP?", isPresented: $apagarTudo, titleVisibility: .visible) {
                 Button("Apagar tudo", role: .destructive) {
@@ -121,13 +125,24 @@ struct PerfilView: View {
 
     private var ia: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Inteligência (Claude)", systemImage: "sparkles")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+            Button {
+                withAnimation { mostrarIA.toggle() }
+            } label: {
+                HStack {
+                    Label("IA do Claude (opcional, paga)", systemImage: "sparkles")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                    Spacer()
+                    Image(systemName: mostrarIA ? "chevron.up" : "chevron.down")
+                        .foregroundStyle(Color.texto2)
+                }
+            }
+            .foregroundStyle(.white)
             Text(IA.temChave
                  ? "Conectado. A IA entende o que você fala e monta os programas de hábitos."
-                 : "Sem chave o app entende só o básico (\"amanhã às 9h\"). Cole sua chave da API pra ele entender tudo e montar programas sob medida.")
+                 : "Não precisa: o app já entende datas, horários e monta programas sozinho, de graça. A IA só deixa tudo mais sob medida.")
                 .font(.system(size: 13, design: .rounded))
                 .foregroundStyle(Color.texto2)
+            if mostrarIA || IA.temChave {
             SecureField("", text: $chave, prompt: Text("sk-ant-...").foregroundStyle(Color.white.opacity(0.3)))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -160,6 +175,7 @@ struct PerfilView: View {
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(r.hasPrefix("Funcionando") || r.hasPrefix("Chave") ? Color.verde : Color.vermelho)
             }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cartao()
@@ -176,6 +192,36 @@ struct PerfilView: View {
                     .multilineTextAlignment(.trailing)
             }
             .font(.system(size: 15, design: .rounded))
+            if Alarmes.disponivel {
+                Toggle(isOn: $alarme) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tocar alarme nas tarefas")
+                        Text(alarme && !alarmeAutorizado ? "Toque pra permitir o alarme" : "Toca igual despertador, mesmo no silencioso")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(Color.texto2)
+                    }
+                }
+                .font(.system(size: 15, design: .rounded))
+                .tint(Color.verde)
+                .onChange(of: alarme) { _, ligado in
+                    Task {
+                        if ligado { alarmeAutorizado = await Alarmes.pedirPermissao() }
+                        Notificacoes.reagendar(ctx)
+                    }
+                }
+                if alarme && !alarmeAutorizado {
+                    Button("Permitir alarme") {
+                        Task {
+                            alarmeAutorizado = await Alarmes.pedirPermissao()
+                            if !alarmeAutorizado, let url = URL(string: UIApplication.openSettingsURLString) {
+                                await UIApplication.shared.open(url)
+                            }
+                            Notificacoes.reagendar(ctx)
+                        }
+                    }
+                    .buttonStyle(EstiloSecundario(cor: .verde))
+                }
+            }
             if !notificacoesLigadas {
                 Button("Ativar notificações") {
                     Task {

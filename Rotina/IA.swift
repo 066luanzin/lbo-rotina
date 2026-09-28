@@ -1,38 +1,6 @@
 import Foundation
 import Security
 
-/// O que a IA entendeu da fala
-struct Interpretacao: Codable {
-    struct TarefaIA: Codable {
-        var titulo: String
-        var data: String       // "AAAA-MM-DD" ou ""
-        var hora: String       // "HH:mm" ou ""
-        var repeticao: String  // nunca | diario | semanal
-    }
-    struct HabitoIA: Codable {
-        var titulo: String
-        var descricao: String
-        var tipo: String       // abstinencia | contagem | duracao
-        var meta: Int
-        var minutos: Int
-        var xp: Int
-        var icone: String
-        var lembretes: [String]
-    }
-    var resumo: String
-    var programa: String
-    var tarefas: [TarefaIA]
-    var habitos: [HabitoIA]
-}
-
-enum ModoCaptura: String, Identifiable {
-    /// "Fale uma tarefa ou lembrete"
-    case tarefa
-    /// "Me conta sua dificuldade" → programa de hábitos
-    case dificuldade
-    var id: String { rawValue }
-}
-
 enum ErroIA: LocalizedError {
     case semChave, recusou, resposta(String), rede(String)
     var errorDescription: String? {
@@ -88,6 +56,9 @@ enum IA {
             Transforme em tarefas. Se ela pedir pra ser lembrada num horário, preencha data e hora. \
             "Hoje à noite" sem hora = 20:00; "de manhã" = 08:00; "à tarde" = 15:00; "9 e meia da noite" = 21:30. \
             Sem data mas com hora: hoje se o horário ainda não passou, senão amanhã. \
+            Hora de 1 a 11 sem "da manhã/da tarde/AM/PM" é ambígua: hoje, use o próximo horário que ainda não \
+            passou (se agora são 14h, "3:30" = 15:30 e "9" = 21:00); em outros dias, de 1 a 6 = tarde, de 7 a 11 = manhã. \
+            Pedido de lembrete com data mas sem hora = 09:00. \
             Se ela descrever um hábito recorrente pra construir ou largar (ex.: "quero beber mais água"), \
             crie em "habitos" em vez de "tarefas". Título curto, começando com verbo, sem "me lembrar de".
             """
@@ -213,95 +184,6 @@ enum IA {
                 "habitos": ["type": "array", "items": habito]
             ]
         ]
-    }
-}
-
-// MARK: - Sem chave: entende o básico sozinho
-
-enum InterpretadorLocal {
-    static func interpretar(_ fala: String, modo: ModoCaptura) -> Interpretacao {
-        switch modo {
-        case .tarefa: return tarefa(fala)
-        case .dificuldade: return programa(fala)
-        }
-    }
-
-    private static func tarefa(_ fala: String) -> Interpretacao {
-        var t = " " + fala.lowercased().folding(options: .diacriticInsensitive, locale: nil) + " "
-        let cal = Calendar.current
-        var dia = Date.now
-        var temDia = false
-        if t.contains("depois de amanha") {
-            dia = cal.date(byAdding: .day, value: 2, to: .now)!; temDia = true
-        } else if t.contains("amanha") {
-            dia = cal.date(byAdding: .day, value: 1, to: .now)!; temDia = true
-        } else if t.contains("hoje") { temDia = true }
-
-        var hora: Int?
-        var minuto = 0
-        if let m = t.range(of: #"(\d{1,2})\s*(?:h|:|horas?)\s*(\d{2})?"#, options: .regularExpression) {
-            let pedaco = String(t[m])
-            let nums = pedaco.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
-            if let h = nums.first, h < 24 { hora = h; minuto = nums.count > 1 ? min(59, nums[1]) : 0 }
-            if t.contains(" e meia") { minuto = 30 }
-            t.removeSubrange(m)
-        } else if t.contains("meio-dia") || t.contains("meio dia") {
-            hora = 12
-        }
-        if let h = hora, h < 12, t.contains("da tarde") || t.contains("da noite") { hora = h + 12 }
-        if hora == nil {
-            if t.contains("de manha") { hora = 8 } else if t.contains("a tarde") { hora = 15 } else if t.contains("a noite") { hora = 20 }
-        }
-
-        let repeticao = (t.contains("todo dia") || t.contains("todos os dias")) ? "diario" : "nunca"
-
-        // Título: o que sobra da frase original sem as palavras de tempo
-        var titulo = fala
-        for lixo in ["me lembrar de", "me lembra de", "me lembre de", "lembrar de", "lembrete de", "lembrete",
-                     "depois de amanhã", "amanhã", "hoje", "às", "as", "da tarde", "da noite", "de manhã",
-                     "à tarde", "à noite", "todos os dias", "todo dia", "e meia"] {
-            titulo = titulo.replacingOccurrences(of: "\\b\(lixo)\\b", with: " ",
-                                                 options: [.regularExpression, .caseInsensitive])
-        }
-        titulo = titulo.replacingOccurrences(of: #"\d{1,2}\s*(h|:|horas?)\s*\d{0,2}"#, with: " ", options: .regularExpression)
-        titulo = titulo.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: " .,!?"))
-        if titulo.isEmpty { titulo = fala }
-        titulo = titulo.prefix(1).uppercased() + titulo.dropFirst()
-
-        var data = ""
-        var horaTexto = ""
-        if let h = hora {
-            var quando = cal.date(bySettingHour: h, minute: minuto, second: 0, of: dia) ?? dia
-            if !temDia && quando < .now { quando = cal.date(byAdding: .day, value: 1, to: quando)! }
-            dia = quando
-            horaTexto = String(format: "%02d:%02d", h, minuto)
-        }
-        if temDia || hora != nil {
-            let iso = DateFormatter()
-            iso.dateFormat = "yyyy-MM-dd"
-            data = iso.string(from: dia)
-        }
-        let resumo = horaTexto.isEmpty ? "Tarefa anotada!" : "Beleza! Te lembro às \(horaTexto)."
-        return Interpretacao(resumo: resumo, programa: "",
-                             tarefas: [.init(titulo: titulo, data: data, hora: horaTexto, repeticao: repeticao)],
-                             habitos: [])
-    }
-
-    private static func programa(_ fala: String) -> Interpretacao {
-        let objetivo = fala.trimmingCharacters(in: CharacterSet(charactersIn: " .,!?"))
-        return Interpretacao(
-            resumo: "Montei um programa básico. Com a chave da IA ele fica sob medida.",
-            programa: objetivo,
-            tarefas: [],
-            habitos: [
-                .init(titulo: "Ficar firme", descricao: "Conte o tempo sem cair no que você quer largar. Se escorregar, registre e recomece sem culpa.",
-                      tipo: "abstinencia", meta: 1, minutos: 1, xp: 20, icone: "nosign", lembretes: ["09:00"]),
-                .init(titulo: "Registrar gatilhos", descricao: "Anote rapidinho o que aconteceu antes da vontade aparecer.",
-                      tipo: "contagem", meta: 1, minutos: 1, xp: 10, icone: "pencil", lembretes: ["21:00"]),
-                .init(titulo: "Pausar e respirar", descricao: "Quando bater a vontade, pare e faça respirações lentas: 4 segundos pra dentro, 6 pra fora.",
-                      tipo: "duracao", meta: 2, minutos: 3, xp: 15, icone: "wind", lembretes: ["15:00"])
-            ])
     }
 }
 

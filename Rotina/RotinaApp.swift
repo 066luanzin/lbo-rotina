@@ -67,6 +67,7 @@ struct RaizView: View {
                !nome.isEmpty {
                 _ = await Notificacoes.pedirPermissao()
             }
+            if !nome.isEmpty && Alarmes.ligado { await Alarmes.pedirPermissao() }
             Notificacoes.reagendar(ctx)
         }
         .onChange(of: fase) { _, nova in
@@ -136,6 +137,7 @@ struct BoasVindasView: View {
         guard !n.isEmpty else { return }
         Task {
             _ = await Notificacoes.pedirPermissao()
+            await Alarmes.pedirPermissao()
             withAnimation { nome = n }
         }
     }

@@ -49,7 +49,29 @@ enum Notificacoes {
                     dateMatching: cal.dateComponents([.weekday, .hour, .minute], from: q), repeats: true)
             }
             pedidos.append(UNNotificationRequest(identifier: "tarefa-\(t.id.uuidString)", content: c, trigger: gatilho))
+
+            // Insiste mais 2 vezes (+3 e +10 min) enquanto a tarefa não for marcada como feita
+            if t.repeticao == .nunca {
+                for (i, atraso) in [3, 10].enumerated() {
+                    guard let depois = cal.date(byAdding: .minute, value: atraso, to: q) else { continue }
+                    let n = UNMutableNotificationContent()
+                    n.title = "⏰ \(t.titulo)"
+                    n.body = "Ainda não marcou como feita. Toque pra abrir."
+                    n.sound = .default
+                    n.userInfo = ["tarefa": t.id.uuidString]
+                    pedidos.append(UNNotificationRequest(
+                        identifier: "tarefa-\(t.id.uuidString)-\(i)", content: n,
+                        trigger: UNCalendarNotificationTrigger(
+                            dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: depois), repeats: false)))
+                }
+            }
         }
+
+        // Alarme de verdade (iOS 26) pras tarefas com horário ainda não feitas
+        Alarmes.reagendar(tarefas.compactMap { t in
+            guard t.temHora, let q = t.quando, !(t.repeticao == .nunca && t.concluidaEm != nil) else { return nil }
+            return Alarmes.Pedido(id: t.id, titulo: t.titulo, quando: q, repeticao: t.repeticao)
+        })
 
         let habitos = (try? ctx.fetch(FetchDescriptor<Habito>())) ?? []
         for h in habitos {

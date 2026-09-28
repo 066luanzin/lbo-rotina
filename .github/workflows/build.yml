@@ -11,6 +11,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Testar o interpretador de voz (datas e horários)
+        run: |
+          cat Rotina/Interpretador.swift Testes/TesteInterpretador.swift > /tmp/teste.swift
+          TZ=America/Sao_Paulo swift /tmp/teste.swift
+
+      - name: Usar o Xcode 26 (precisa pro alarme do iOS 26)
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XC" ]; then echo "Xcode 26 não encontrado:"; ls /Applications | grep -i xcode; exit 1; fi
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
       - name: Instalar XcodeGen
         run: brew install xcodegen
 
