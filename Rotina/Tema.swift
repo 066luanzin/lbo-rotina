@@ -116,3 +116,8 @@ enum Haptico {
     static func sucesso() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func erro() { UINotificationFeedbackGenerator().notificationOccurred(.error) }
 }
+
+extension String {
+    /// "segunda-feira, 28 de setembro" → "Segunda-feira, 28 de setembro"
+    var primeiraMaiuscula: String { prefix(1).uppercased() + dropFirst() }
+}

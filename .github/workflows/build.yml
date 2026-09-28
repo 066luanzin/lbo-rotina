@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+env:
+  VERSAO_BASE: "1.2"
+
 jobs:
   build:
     runs-on: macos-15
@@ -35,6 +41,8 @@ jobs:
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            MARKETING_VERSION="$VERSAO_BASE.${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -80; tail -30 build.log; exit 1; }
 
@@ -48,3 +56,13 @@ jobs:
         with:
           name: LBO-Rotina-ipa
           path: LBO-Rotina.ipa
+
+      - name: Publicar versão e atualizar a fonte do AltStore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="$VERSAO_BASE.${{ github.run_number }}"
+          TAG="v$VER"
+          NOTAS=$(git log -1 --pretty=%s)
+          python3 scripts/fonte_altstore.py "$VER" "${{ github.run_number }}" "$TAG" "$(stat -f%z LBO-Rotina.ipa)" "$NOTAS" > altstore.json
+          gh release create "$TAG" LBO-Rotina.ipa altstore.json --title "LBO Rotina $VER" --notes "$NOTAS" --latest

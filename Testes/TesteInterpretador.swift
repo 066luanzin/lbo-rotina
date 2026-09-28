@@ -30,6 +30,18 @@ checar("Quero que você me lembre de cancelar a assinatura do YouTube Music no d
 checar("me lembre de cancelar a assinatura do YouTube Music dia 1 do 10",
        titulo: "Cancelar a assinatura do YouTube Music", data: "2026-10-01", hora: "09:00")
 
+// 28/09 às 18:47: queria 06:30 da manhã, tinha ido pra 18:30
+checar("Cria pra mim um alarme um alarme não cria pra mim na verdade amanhã às 6:30 pra mim comprar pão beleza",
+       agora: "2026-09-28 18:47", titulo: "Comprar pão", data: "2026-09-29", hora: "06:30")
+checar("amanhã 6 e meia comprar pão", agora: "2026-09-28 18:47", titulo: "Comprar pão", data: "2026-09-29", hora: "06:30")
+checar("comprar pão 6:30", agora: "2026-09-28 18:47", titulo: "Comprar pão", data: "2026-09-29", hora: "06:30")
+checar("seis e meia da manhã comprar pão", agora: "2026-09-28 18:47", titulo: "Comprar pão", data: "2026-09-29", hora: "06:30")
+checar("amanhã às 6 correr", titulo: "Correr", data: "2026-09-29", hora: "06:00")
+// Acento em formato "separado", como às vezes vem do reconhecimento de voz
+checar("amanhã às 7 academia".decomposedStringWithCanonicalMapping, titulo: "Academia", data: "2026-09-29", hora: "07:00")
+checar("me lembra daqui a 2 minutos de testar o alarme", titulo: "Testar o alarme", data: "2026-09-28", hora: "14:02")
+checar("Prospectar o nicho de dentista quinta-feira às 2", titulo: "Prospectar o nicho de dentista", data: "2026-10-01", hora: "14:00")
+
 // Horários ambíguos
 checar("me lembra de varrer a casa hoje às 9 e meia da noite", titulo: "Varrer a casa", data: "2026-09-28", hora: "21:30")
 checar("ligar pro João 3:30 PM", titulo: "Ligar pro João", data: "2026-09-28", hora: "15:30")

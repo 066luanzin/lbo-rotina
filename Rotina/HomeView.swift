@@ -34,6 +34,10 @@ struct HomeView: View {
                     .padding(.bottom, 16)
             }
             .background(Color.fundo.ignoresSafeArea())
+            // Faixa atrás do relógio: o conteúdo rolado não fica por baixo da hora e da bateria
+            .overlay(alignment: .top) {
+                Color.fundo.opacity(0.95).ignoresSafeArea(edges: .top).frame(height: 0)
+            }
             .navigationDestination(for: Habito.self) { HabitoDetalheView(habito: $0) }
             .sheet(item: $cronometro) { CronometroView(habito: $0) }
         }
@@ -50,7 +54,7 @@ struct HomeView: View {
                 .background(Color.destaque.gradient, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text("E aí, \(nome)!").titulo(20)
-                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).capitalized)
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).primeiraMaiuscula)
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(Color.texto2)
             }
@@ -160,7 +164,7 @@ struct HomeView: View {
         let hs = habitos.filter { Calendar.current.startOfDay(for: $0.criadoEm) <= Calendar.current.startOfDay(for: dia) }
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(hoje ? "Hoje" : dia.formatted(.dateTime.weekday(.wide).day()).capitalized).titulo(20)
+                Text(hoje ? "Hoje" : dia.formatted(.dateTime.weekday(.wide).day()).primeiraMaiuscula).titulo(20)
                 Text("\(f)/\(t)")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(Color.texto2)

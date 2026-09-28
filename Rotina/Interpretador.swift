@@ -115,8 +115,9 @@ enum InterpretadorLocal {
             return dia(diff)
         }
 
-        // Limpeza: "p.m." → pm, "1º" → 1, pontuação vira espaço
-        var s = fala
+        // Limpeza: acentos no formato padrão (o reconhecimento de voz às vezes manda "a" + "~" separados),
+        // "p.m." → pm, "1º" → 1, pontuação vira espaço
+        var s = fala.precomposedStringWithCanonicalMapping
         s = s.replacingOccurrences(of: "p.m.", with: " pm", options: .caseInsensitive)
         s = s.replacingOccurrences(of: "a.m.", with: " am", options: .caseInsensitive)
         for c in ["º", "°", "ª"] { s = s.replacingOccurrences(of: c, with: "") }
@@ -222,6 +223,11 @@ enum InterpretadorLocal {
             hora = Int(g[1] ?? ""); ampm = g[2]
         } else if let g = L.tirar(#"\#(antes)\b(\#(palavrasHora))\b(?:\s+horas?)?\#(extra)\#(sufixo)"#) {
             hora = numero(g[1] ?? ""); minuto = minutos(g[2]); ampm = g[3]
+        } else if let g = L.tirar(#"\b(\#(palavrasHora))\s+(?:horas?\s+)?e\s+(meia|quinze|quarenta\s+e\s+cinco)\b\#(sufixo)"#) {
+            // "seis e meia", "sete horas e quinze"
+            hora = numero(g[1] ?? ""); minuto = minutos(g[2]); ampm = g[3]
+        } else if let g = L.tirar(#"\b(\#(palavrasHora))\s+horas?\b\#(sufixo)"#) {
+            hora = numero(g[1] ?? ""); ampm = g[2]
         }
         if let h = hora, !(0...23).contains(h) { hora = nil }
         minuto = min(59, max(0, minuto))
@@ -238,8 +244,8 @@ enum InterpretadorLocal {
             let am = a == "am" || periodo == "manha" || periodo == "madrugada"
             var ambigua = false
             if pm && h < 12 { h += 12 } else if am && h == 12 { h = 0 } else if !pm && !am && (1...11).contains(h) { ambigua = true }
-            // De 1 a 6 sem "da manhã" quase sempre é de tarde; de 7 a 11, de manhã
-            let preferida = ambigua && h <= 6 ? h + 12 : h
+            // Sem "da manhã/da tarde": de 1 a 5 é de tarde; de 6 a 11, de manhã
+            let preferida = ambigua && h <= 5 ? h + 12 : h
             temHora = true
             if let d = data, !disseHoje {
                 quando = em(d, preferida, minuto)
@@ -273,7 +279,20 @@ enum InterpretadorLocal {
         }
 
         // Título: o que sobrou da frase, sem "me lembra de", "quero que você", etc.
+        // Se a pessoa se corrigiu ("não cria… na verdade…"), vale só o que veio depois
+        if let re = try? NSRegularExpression(pattern: #"\b(?:na\s+verdade|quer\s+dizer|ou\s+melhor|melhor\s+dizendo|corrigindo)\b"#,
+                                             options: [.caseInsensitive]) {
+            let ns = L.texto as NSString
+            if let ultima = re.matches(in: L.texto, range: NSRange(location: 0, length: ns.length)).last {
+                let fim = ultima.range.location + ultima.range.length
+                L.texto = ns.substring(from: fim)
+            }
+        }
         let enchimentos = [
+            #"\b(?:cria|crie|criar|coloca|coloque|colocar|bota|bote|p[õo]e|ponha|define|marca|marque|agenda|agende|faz|fa[çc]a|adiciona|adicione|salva|salve)\s+(?:(?:pra|para)\s+mim\s+)?(?:(?:um|uma)\s+)?(?:alarme|lembrete|tarefa|despertador|notifica[çc][ãa]o)\b(?:\s+(?:de|para|pra|que))?"#,
+            #"\b(?:um|uma)\s+(?:alarme|despertador|lembrete|tarefa)\b(?:\s+(?:de|para|pra))?"#,
+            #"\b(?:pra|para)\s+mim\b"#,
+            #"\b(?:beleza|valeu|obrigad[oa]|t[áa]\s+bom|pode\s+ser|fechou)\b"#,
             #"\b(?:ei|oi|ok|ol[áa])\b"#,
             #"\b(?:eu\s+)?(?:quero|queria|gostaria)\s+(?:que\s+)?(?:voc[êe]\s+|vc\s+)?(?:me\s+)?(?:lembr[ae]s?|avis[ae]s?)\b(?:\s+(?:de|que|para|pra))?"#,
             #"\b(?:me\s+)?(?:lembre-me|lembr[ae]r?|avis[ae]r?)\b(?:\s+(?:de|que|para|pra))?"#,
