@@ -157,7 +157,7 @@ enum InterpretadorLocal {
             }
         } else if L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+)?)?(?:n?os\s+|em\s+)?dias?\s+[úu]te(?:is|l)\b|\bdurante\s+a\s+semana\b"#) != nil {
             diasRep = [2, 3, 4, 5, 6]
-        } else if L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+)?)?(?:n[oa]s?\s+|aos\s+)?fins?\s+de\s+semana\b"#) != nil {
+        } else if L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+)?)?(?:n[oa]s?\s+|aos\s+)?(?:fim|fins)\s+de\s+semana\b"#) != nil {
             diasRep = [7, 1]
         } else if let g = L.tirar(#"\b(?:tod[oa]s?\s+(?:as\s+|os\s+)?)?(?:n[ao]s?\s+|[àa]s\s+)?(\#(ds)(?:\s+(?:e\s+)?\#(ds))+)\b"#),
                   let re = try? NSRegularExpression(pattern: diasSemana, options: [.caseInsensitive]) {
