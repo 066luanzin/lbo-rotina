@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.2"
+    MARKETING_VERSION: "1.3"
     CURRENT_PROJECT_VERSION: "2"
 targets:
   Rotina:
@@ -30,6 +30,8 @@ targets:
         NSMicrophoneUsageDescription: O LBO Rotina usa o microfone pra você falar suas tarefas e hábitos.
         NSSpeechRecognitionUsageDescription: O LBO Rotina transforma o que você fala em texto pra criar tarefas e hábitos.
         NSAlarmKitUsageDescription: O LBO Rotina toca um alarme na hora das suas tarefas, mesmo com o celular no silencioso.
+        NSCalendarsFullAccessUsageDescription: O LBO Rotina lê sua agenda pra mostrar o bloco de agora e avisar antes de cada compromisso.
+        NSCalendarsUsageDescription: O LBO Rotina lê sua agenda pra mostrar o bloco de agora e avisar antes de cada compromisso.
         CFBundleURLTypes:
           - CFBundleURLName: com.lborotina.app
             CFBundleURLSchemes: [lborotina]

@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import EventKit
+import Combine
 
 struct HomeView: View {
     @Environment(AppState.self) private var estado
@@ -10,6 +12,7 @@ struct HomeView: View {
     @AppStorage("nome") private var nome = ""
     @State private var dia = Date.now
     @State private var cronometro: Habito?
+    @State private var agenda = Agenda.shared
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
     private var hoje: Bool { Calendar.current.isDateInToday(dia) }
@@ -20,10 +23,12 @@ struct HomeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         cabecalho
+                        cartaoAgora
                         if habitos.isEmpty { cartaoPrograma }
                         semana
                         resumo
                         lista
+                        agendaDoDia
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 110)
@@ -40,6 +45,71 @@ struct HomeView: View {
             }
             .navigationDestination(for: Habito.self) { HabitoDetalheView(habito: $0) }
             .sheet(item: $cronometro) { CronometroView(habito: $0) }
+            // Mudou algo no Google Agenda: relê e refaz os avisos
+            .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
+                agenda.recarregar()
+                Notificacoes.reagendar(ctx)
+            }
+        }
+    }
+
+    // MARK: Agora / Próximo (Google Agenda)
+
+    @ViewBuilder
+    private var cartaoAgora: some View {
+        if agenda.autorizada {
+            TimelineView(.periodic(from: .now, by: 30)) { t in
+                let _ = agenda.versao
+                let par = agenda.agoraEProximo(t.date)
+                if par.0 != nil || par.1 != nil {
+                    CartaoAgora(atual: par.0, proximo: par.1, agora: t.date)
+                }
+            }
+        } else if !agenda.negada {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.verde)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Conectar sua agenda").font(.system(size: 15, weight: .bold, design: .rounded))
+                    Text("Mostra o bloco de agora e avisa antes de cada um.")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                }
+                Spacer()
+                Button("Conectar") {
+                    Task {
+                        await agenda.pedirAcesso()
+                        Notificacoes.reagendar(ctx)
+                    }
+                }
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.fundo)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.verde, in: Capsule())
+            }
+            .cartao(14)
+        }
+    }
+
+    @ViewBuilder
+    private var agendaDoDia: some View {
+        let _ = agenda.versao
+        let blocos = agenda.blocos(do: dia)
+        if !blocos.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Agenda").titulo(20)
+                VStack(spacing: 0) {
+                    ForEach(blocos) { b in
+                        LinhaBloco(bloco: b)
+                        if b.id != blocos.last?.id {
+                            Divider().overlay(Color.borda).padding(.leading, 22)
+                        }
+                    }
+                }
+                .cartao(8)
+            }
         }
     }
 
@@ -395,5 +465,104 @@ struct LinhaTarefa: View {
             }
         }
         .sheet(isPresented: $editar) { EditarTarefaView(tarefa: tarefa) }
+    }
+}
+
+// MARK: - Agenda
+
+struct CartaoAgora: View {
+    let atual: Bloco?
+    let proximo: Bloco?
+    let agora: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let a = atual {
+                HStack(spacing: 6) {
+                    Circle().fill(Color.verde).frame(width: 8, height: 8)
+                    Text("AGORA · ATÉ \(a.fim.formatted(.dateTime.hour().minute()))")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(Color.verde)
+                    Spacer()
+                    Text("faltam \(falta(ate: a.fim))")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                }
+                Text(a.titulo).titulo(22).lineLimit(2)
+                ProgressView(value: min(1, max(0, agora.timeIntervalSince(a.inicio) / a.fim.timeIntervalSince(a.inicio))))
+                    .tint(Color.verde)
+            } else {
+                Text("LIVRE AGORA")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.texto2)
+            }
+            if let p = proximo {
+                if atual != nil { Divider().overlay(Color.borda) }
+                HStack(spacing: 8) {
+                    Text(Calendar.current.isDateInToday(p.inicio)
+                         ? p.inicio.formatted(.dateTime.hour().minute())
+                         : "amanhã \(p.inicio.formatted(.dateTime.hour().minute()))")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.verde)
+                    Text(p.titulo)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                    Spacer()
+                    if Calendar.current.isDateInToday(p.inicio) {
+                        Text("em \(falta(ate: p.inicio))")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(Color.texto2)
+                    }
+                }
+            }
+        }
+        .cartao(16)
+    }
+
+    private func falta(ate data: Date) -> String {
+        let minutos = max(0, Int(data.timeIntervalSince(agora) / 60))
+        if minutos < 60 { return "\(minutos) min" }
+        return minutos % 60 == 0 ? "\(minutos / 60)h" : "\(minutos / 60)h\(String(format: "%02d", minutos % 60))"
+    }
+}
+
+struct LinhaBloco: View {
+    let bloco: Bloco
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { t in
+            let agora = bloco.acontecendo(t.date)
+            let passou = bloco.fim <= t.date
+            HStack(spacing: 12) {
+                Capsule().fill(bloco.cor).frame(width: 4, height: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bloco.titulo)
+                        .font(.system(size: 15, weight: agora ? .bold : .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(bloco.horario)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                }
+                Spacer()
+                if agora {
+                    Text("AGORA")
+                        .font(.system(size: 10, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.fundo)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.verde, in: Capsule())
+                } else if Agenda.tocaAlarme(bloco) {
+                    Image(systemName: "alarm.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.texto2)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .opacity(passou ? 0.45 : 1)
+        }
     }
 }

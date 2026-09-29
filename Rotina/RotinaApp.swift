@@ -72,6 +72,10 @@ struct RaizView: View {
         }
         .onChange(of: fase) { _, nova in
             if nova == .background { Notificacoes.reagendar(ctx) }
+            if nova == .active {
+                Agenda.shared.recarregar()
+                Notificacoes.reagendar(ctx)
+            }
         }
     }
 }

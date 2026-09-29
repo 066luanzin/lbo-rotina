@@ -17,6 +17,10 @@ struct PerfilView: View {
     @State private var mostrarIA = false
     @AppStorage("alarmeTarefas") private var alarme = true
     @State private var alarmeAutorizado = Alarmes.autorizado
+    @State private var agenda = Agenda.shared
+    @AppStorage("avisoBlocos") private var avisoBlocos = true
+    @AppStorage("minutosAntesBloco") private var minutosAntes = 5
+    @AppStorage("blocosComAlarme") private var blocosComAlarme = "Alinhamento, Fechamento"
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
 
@@ -192,6 +196,54 @@ struct PerfilView: View {
                     .multilineTextAlignment(.trailing)
             }
             .font(.system(size: 15, design: .rounded))
+            // Agenda (Google Agenda pelo Calendário do iPhone)
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Agenda", systemImage: "calendar")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                if agenda.autorizada {
+                    let _ = agenda.versao
+                    Toggle("Avisar antes de cada bloco", isOn: $avisoBlocos)
+                        .tint(Color.verde)
+                        .onChange(of: avisoBlocos) { _, _ in Notificacoes.reagendar(ctx) }
+                    if avisoBlocos {
+                        Picker("Quanto antes", selection: $minutosAntes) {
+                            Text("Na hora").tag(0)
+                            Text("5 min antes").tag(5)
+                            Text("10 min antes").tag(10)
+                            Text("15 min antes").tag(15)
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: minutosAntes) { _, _ in Notificacoes.reagendar(ctx) }
+                    }
+                    Text("Blocos que tocam alarme (parte do nome, separado por vírgula)")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                    TextField("Alinhamento, Fechamento", text: $blocosComAlarme)
+                        .padding(10)
+                        .background(Color.cartao2, in: RoundedRectangle(cornerRadius: 10))
+                        .onSubmit { Notificacoes.reagendar(ctx) }
+                } else {
+                    Text(agenda.negada
+                         ? "Acesso negado. Libere em Ajustes > Apps > LBO Rotina > Calendários > Acesso Total."
+                         : "Conecte pra ver o bloco de agora e receber aviso antes de cada compromisso.")
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                    Button(agenda.negada ? "Abrir Ajustes" : "Conectar agenda") {
+                        Task {
+                            if agenda.negada, let url = URL(string: UIApplication.openSettingsURLString) {
+                                await UIApplication.shared.open(url)
+                            } else {
+                                await agenda.pedirAcesso()
+                                Notificacoes.reagendar(ctx)
+                            }
+                        }
+                    }
+                    .buttonStyle(EstiloSecundario(cor: .verde))
+                }
+            }
+            .font(.system(size: 15, design: .rounded))
+            .padding(.vertical, 4)
+
             if Alarmes.disponivel {
                 Toggle(isOn: $alarme) {
                     VStack(alignment: .leading, spacing: 2) {

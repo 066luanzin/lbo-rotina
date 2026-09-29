@@ -77,11 +77,20 @@ enum Notificacoes {
             }
         }
 
+        // Blocos da agenda (Google Agenda) dos próximos 7 dias
+        let agora = Date.now
+        let blocos = Agenda.shared.blocos(de: agora, ate: cal.date(byAdding: .day, value: 7, to: agora) ?? agora)
+
         // Alarme de verdade (iOS 26) pras tarefas com horário ainda não feitas
-        Alarmes.reagendar(tarefas.compactMap { t in
+        // e pros blocos marcados como importantes (ex.: Alinhamento SOF, Fechamento do dia)
+        var alarmes: [Alarmes.Pedido] = tarefas.compactMap { t in
             guard t.temHora, let q = t.quando, !(t.repeticao == .nunca && t.concluidaEm != nil) else { return nil }
             return Alarmes.Pedido(id: t.id, titulo: t.titulo, quando: q, repeticao: t.repeticao, dias: t.dias)
-        })
+        }
+        alarmes += blocos.filter(Agenda.tocaAlarme).prefix(14).map {
+            Alarmes.Pedido(id: UUID(texto: $0.id), titulo: $0.titulo, quando: $0.inicio, repeticao: .nunca)
+        }
+        Alarmes.reagendar(alarmes)
 
         let habitos = (try? ctx.fetch(FetchDescriptor<Habito>())) ?? []
         for h in habitos {
@@ -96,6 +105,24 @@ enum Notificacoes {
                 let gatilho = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: partes[0], minute: partes[1]),
                                                             repeats: true)
                 pedidos.append(UNNotificationRequest(identifier: "habito-\(h.id.uuidString)-\(i)", content: c, trigger: gatilho))
+            }
+        }
+
+        // "Em 5 min: Operação (piores)" antes de cada bloco, até completar o limite do iPhone
+        if Agenda.avisarAntes {
+            let antes = Agenda.minutosAntes
+            for b in blocos {
+                guard pedidos.count < 60 else { break }
+                let quando = b.inicio.addingTimeInterval(TimeInterval(-antes * 60))
+                guard quando > agora else { continue }
+                let c = UNMutableNotificationContent()
+                c.title = antes == 0 ? "Agora: \(b.titulo)" : "Em \(antes) min: \(b.titulo)"
+                c.body = b.horario
+                c.sound = .default
+                pedidos.append(UNNotificationRequest(
+                    identifier: "bloco-\(UUID(texto: b.id).uuidString)", content: c,
+                    trigger: UNCalendarNotificationTrigger(
+                        dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false)))
             }
         }
 
