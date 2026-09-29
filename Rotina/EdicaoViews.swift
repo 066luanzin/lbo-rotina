@@ -100,6 +100,7 @@ struct EditarTarefaView: View {
     @State private var temHora = false
     @State private var quando = Date.now
     @State private var repeticao = Repeticao.nunca
+    @State private var dias: Set<Int> = [2, 3, 4, 5, 6]
 
     var body: some View {
         NavigationStack {
@@ -118,6 +119,23 @@ struct EditarTarefaView: View {
                         }
                         Picker("Repetir", selection: $repeticao) {
                             ForEach(Repeticao.allCases, id: \.self) { Text($0.nome).tag($0) }
+                        }
+                        if repeticao == .dias {
+                            // Toque pra ligar/desligar cada dia (começa na segunda)
+                            HStack(spacing: 6) {
+                                ForEach([2, 3, 4, 5, 6, 7, 1], id: \.self) { d in
+                                    let ligado = dias.contains(d)
+                                    Text(DiasSemana.letras[d - 1])
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(ligado ? Color.fundo : .white)
+                                        .frame(maxWidth: .infinity, minHeight: 36)
+                                        .background(ligado ? Color.verde : Color.cartao2, in: Circle())
+                                        .onTapGesture {
+                                            if ligado { dias.remove(d) } else { dias.insert(d) }
+                                        }
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
                     }
                 }
@@ -151,6 +169,7 @@ struct EditarTarefaView: View {
                 temHora = tarefa.temHora
                 quando = tarefa.quando ?? .now
                 repeticao = tarefa.repeticao
+                if tarefa.repeticao == .dias { dias = Set(tarefa.dias) }
             }
         }
         .presentationDetents([.medium, .large])
@@ -170,6 +189,9 @@ struct EditarTarefaView: View {
         t.quando = data
         t.temHora = temData && temHora
         t.repeticao = temData ? repeticao : .nunca
+        if t.repeticao == .dias {
+            if dias.isEmpty { t.repeticao = .nunca } else { t.dias = Array(dias) }
+        }
         try? ctx.save()
         Notificacoes.reagendar(ctx)
         fechar()

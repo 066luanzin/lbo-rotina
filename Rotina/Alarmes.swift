@@ -18,6 +18,7 @@ enum Alarmes {
         let titulo: String
         let quando: Date
         let repeticao: Repeticao
+        var dias: [Int] = []
     }
 
     /// true = autorizado
@@ -80,6 +81,9 @@ enum Alarmes {
             case .semanal:
                 let dia = semana[cal.component(.weekday, from: p.quando) - 1]
                 agenda = .relative(.init(time: .init(hour: h, minute: mi), repeats: .weekly([dia])))
+            case .dias:
+                guard !p.dias.isEmpty else { continue }
+                agenda = .relative(.init(time: .init(hour: h, minute: mi), repeats: .weekly(p.dias.map { semana[$0 - 1] })))
             }
             let config = AlarmManager.AlarmConfiguration<MetaAlarme>(schedule: agenda, attributes: atributos)
             _ = try? await m.schedule(id: p.id, configuration: config)

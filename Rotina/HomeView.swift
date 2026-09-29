@@ -371,7 +371,7 @@ struct LinhaTarefa: View {
                     }
                     if tarefa.repeticao != .nunca {
                         Image(systemName: "repeat").font(.system(size: 10))
-                        Text(tarefa.repeticao.nome)
+                        Text(tarefa.repeticaoTexto)
                     }
                     if tarefa.horaTexto == nil && tarefa.repeticao == .nunca { Text("Tarefa · \(xpTarefa) XP") }
                 }

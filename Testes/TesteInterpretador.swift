@@ -42,6 +42,22 @@ checar("amanhã às 7 academia".decomposedStringWithCanonicalMapping, titulo: "A
 checar("me lembra daqui a 2 minutos de testar o alarme", titulo: "Testar o alarme", data: "2026-09-28", hora: "14:02")
 checar("Prospectar o nicho de dentista quinta-feira às 2", titulo: "Prospectar o nicho de dentista", data: "2026-10-01", hora: "14:00")
 
+// 28/09 às 22:02: queria de segunda a sexta às 7h30 mandar "plano" pro Claude.
+// Criou só pra segunda e com o título errado. ("Claudio" é o reconhecimento de voz ouvindo "Claude")
+checar("Eu quero que você cria pra mim lembretes de segunda a sexta todo das 7h30 com o nome de mandar mensagem para o Claudio com o nome plano",
+       agora: "2026-09-28 22:02", titulo: "Mandar mensagem para o Claudio \"plano\"", data: "2026-09-29", hora: "07:30",
+       repeticao: "dias:2,3,4,5,6")
+checar("de segunda a sexta às 7h30 mandar mensagem pro Claude com a palavra plano",
+       agora: "2026-09-28 22:02", titulo: "Mandar mensagem pro Claude \"plano\"", data: "2026-09-29", hora: "07:30",
+       repeticao: "dias:2,3,4,5,6")
+checar("cria um lembrete de segunda a sábado às 7h30 chamado mandar mensagem pro Claudio",
+       agora: "2026-09-28 22:02", titulo: "Mandar mensagem pro Claudio", data: "2026-09-29", hora: "07:30",
+       repeticao: "dias:2,3,4,5,6,7")
+checar("dias úteis às 8 tomar remédio", titulo: "Tomar remédio", data: "2026-09-29", hora: "08:00", repeticao: "dias:2,3,4,5,6")
+checar("segunda quarta e sexta às 18h academia", titulo: "Academia", data: "2026-09-28", hora: "18:00", repeticao: "dias:2,4,6")
+checar("fim de semana às 10h lavar o carro", titulo: "Lavar o carro", data: "2026-10-03", hora: "10:00", repeticao: "dias:1,7")
+checar("me lembra de segunda a sexta de beber água", titulo: "Beber água", data: "2026-09-29", hora: "09:00", repeticao: "dias:2,3,4,5,6")
+
 // Horários ambíguos
 checar("me lembra de varrer a casa hoje às 9 e meia da noite", titulo: "Varrer a casa", data: "2026-09-28", hora: "21:30")
 checar("ligar pro João 3:30 PM", titulo: "Ligar pro João", data: "2026-09-28", hora: "15:30")

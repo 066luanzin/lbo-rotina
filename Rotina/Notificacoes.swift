@@ -35,20 +35,30 @@ enum Notificacoes {
             c.body = "Lembrete do LBO Rotina"
             c.sound = .default
             c.userInfo = ["tarefa": t.id.uuidString]
-            let gatilho: UNCalendarNotificationTrigger
+            var gatilhos: [UNCalendarNotificationTrigger] = []
             switch t.repeticao {
             case .nunca:
                 guard q > .now, t.concluidaEm == nil else { continue }
-                gatilho = UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: q), repeats: false)
+                gatilhos = [UNCalendarNotificationTrigger(
+                    dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: q), repeats: false)]
             case .diario:
-                gatilho = UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.hour, .minute], from: q), repeats: true)
+                gatilhos = [UNCalendarNotificationTrigger(
+                    dateMatching: cal.dateComponents([.hour, .minute], from: q), repeats: true)]
             case .semanal:
-                gatilho = UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.weekday, .hour, .minute], from: q), repeats: true)
+                gatilhos = [UNCalendarNotificationTrigger(
+                    dateMatching: cal.dateComponents([.weekday, .hour, .minute], from: q), repeats: true)]
+            case .dias:
+                // Um aviso repetido pra cada dia escolhido (ex.: segunda a sexta)
+                var comps = cal.dateComponents([.hour, .minute], from: q)
+                for dia in t.dias {
+                    comps.weekday = dia
+                    gatilhos.append(UNCalendarNotificationTrigger(dateMatching: comps, repeats: true))
+                }
             }
-            pedidos.append(UNNotificationRequest(identifier: "tarefa-\(t.id.uuidString)", content: c, trigger: gatilho))
+            for (i, gatilho) in gatilhos.enumerated() {
+                let id = i == 0 ? "tarefa-\(t.id.uuidString)" : "tarefa-\(t.id.uuidString)-d\(i)"
+                pedidos.append(UNNotificationRequest(identifier: id, content: c, trigger: gatilho))
+            }
 
             // Insiste mais 2 vezes (+3 e +10 min) enquanto a tarefa não for marcada como feita
             if t.repeticao == .nunca {
@@ -70,7 +80,7 @@ enum Notificacoes {
         // Alarme de verdade (iOS 26) pras tarefas com horário ainda não feitas
         Alarmes.reagendar(tarefas.compactMap { t in
             guard t.temHora, let q = t.quando, !(t.repeticao == .nunca && t.concluidaEm != nil) else { return nil }
-            return Alarmes.Pedido(id: t.id, titulo: t.titulo, quando: q, repeticao: t.repeticao)
+            return Alarmes.Pedido(id: t.id, titulo: t.titulo, quando: q, repeticao: t.repeticao, dias: t.dias)
         })
 
         let habitos = (try? ctx.fetch(FetchDescriptor<Habito>())) ?? []
@@ -127,8 +137,11 @@ enum Aplicador {
                 temHora = true
                 if t.data.isEmpty, let q = quando, q < .now { quando = cal.date(byAdding: .day, value: 1, to: q) }
             }
+            // "dias:2,3,4,5,6" = de segunda a sexta
+            let ehDias = t.repeticao.hasPrefix("dias:")
             let nova = Tarefa(titulo: t.titulo, quando: quando, temHora: temHora,
-                              repeticao: Repeticao(rawValue: t.repeticao) ?? .nunca)
+                              repeticao: ehDias ? .dias : (Repeticao(rawValue: t.repeticao) ?? .nunca))
+            if ehDias { nova.diasRaw = String(t.repeticao.dropFirst(5)) }
             ctx.insert(nova)
             novasTarefas.append(nova)
         }

@@ -20,13 +20,29 @@ enum TipoHabito: String, CaseIterable, Codable {
 }
 
 enum Repeticao: String, CaseIterable, Codable {
-    case nunca, diario, semanal
+    case nunca, diario, semanal, dias
     var nome: String {
         switch self {
         case .nunca: return "Uma vez"
         case .diario: return "Todo dia"
         case .semanal: return "Toda semana"
+        case .dias: return "Dias da semana"
         }
+    }
+}
+
+/// Dias da semana no padrão do Calendar (1 = domingo … 7 = sábado)
+enum DiasSemana {
+    static let curtos = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+    static let letras = ["D", "S", "T", "Q", "Q", "S", "S"]
+
+    static func texto(_ dias: [Int]) -> String {
+        let d = Set(dias)
+        if d == Set(2...6) { return "Seg a Sex" }
+        if d == Set(2...7) { return "Seg a Sáb" }
+        if d == [1, 7] { return "Fim de semana" }
+        if d.count == 7 { return "Todo dia" }
+        return d.sorted().map { curtos[$0 - 1] }.joined(separator: ", ")
     }
 }
 
@@ -38,6 +54,8 @@ final class Tarefa {
     var quando: Date?
     var temHora: Bool = false
     var repeticaoRaw: String = Repeticao.nunca.rawValue
+    /// Repetição "dias": "2,3,4,5,6" = de segunda a sexta
+    var diasRaw: String = ""
     var concluidaEm: Date?
     var criadaEm: Date = Date.now
 
@@ -51,6 +69,16 @@ final class Tarefa {
     var repeticao: Repeticao {
         get { Repeticao(rawValue: repeticaoRaw) ?? .nunca }
         set { repeticaoRaw = newValue.rawValue }
+    }
+
+    var dias: [Int] {
+        get { diasRaw.split(separator: ",").compactMap { Int($0) }.filter { (1...7).contains($0) } }
+        set { diasRaw = Array(Set(newValue)).sorted().map(String.init).joined(separator: ",") }
+    }
+
+    /// "Todo dia", "Seg a Sex", "Toda semana"…
+    var repeticaoTexto: String {
+        repeticao == .dias ? DiasSemana.texto(dias) : repeticao.nome
     }
 
     /// Tarefa que se repete conta como feita só no dia em que foi marcada
@@ -76,6 +104,9 @@ final class Tarefa {
         case .semanal:
             return cal.startOfDay(for: q) <= cal.startOfDay(for: dia)
                 && cal.component(.weekday, from: q) == cal.component(.weekday, from: dia)
+        case .dias:
+            return cal.startOfDay(for: q) <= cal.startOfDay(for: dia)
+                && dias.contains(cal.component(.weekday, from: dia))
         }
     }
 

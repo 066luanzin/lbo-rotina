@@ -201,7 +201,7 @@ struct CapturaView: View {
         let dia = Calendar.current.isDateInToday(q) ? "Hoje" :
             Calendar.current.isDateInTomorrow(q) ? "Amanhã" : q.formatted(.dateTime.day().month(.abbreviated))
         var s = t.temHora ? "\(dia) às \(q.formatted(.dateTime.hour().minute()))" : dia
-        if t.repeticao != .nunca { s += " · \(t.repeticao.nome.lowercased())" }
+        if t.repeticao != .nunca { s += " · \(t.repeticaoTexto.lowercased())" }
         return s
     }
 

@@ -144,8 +144,35 @@ enum InterpretadorLocal {
             quandoExato = agora.addingTimeInterval(TimeInterval(segundos))
         }
 
-        // Repetição
-        if L.tirar(#"\btod[oa]s?\s+(?:os\s+|o\s+)?dias?\b|\bdiariamente\b"#) != nil {
+        // Repetição por dias da semana: "de segunda a sexta", "dias úteis", "fim de semana", "segunda, quarta e sexta"
+        var diasRep: [Int] = []
+        let ds = #"(?:\#(diasSemana))(?:[- ]feiras?)?"#
+        if let g = L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+dias\s+)?)?(?:de\s+|da\s+|das\s+)?(\#(diasSemana))(?:[- ]feiras?)?\s+(?:a|à|ao|at[ée])\s+(\#(diasSemana))(?:[- ]feiras?)?\b"#),
+           let de = diaSemana(g[1] ?? ""), let ate = diaSemana(g[2] ?? "") {
+            var d = de
+            while true {
+                diasRep.append(d)
+                if d == ate || diasRep.count >= 7 { break }
+                d = d % 7 + 1
+            }
+        } else if L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+)?)?(?:n?os\s+|em\s+)?dias?\s+[úu]te(?:is|l)\b|\bdurante\s+a\s+semana\b"#) != nil {
+            diasRep = [2, 3, 4, 5, 6]
+        } else if L.tirar(#"\b(?:tod[oa]s?\s+(?:os\s+)?)?(?:n[oa]s?\s+|aos\s+)?fins?\s+de\s+semana\b"#) != nil {
+            diasRep = [7, 1]
+        } else if let g = L.tirar(#"\b(?:tod[oa]s?\s+(?:as\s+|os\s+)?)?(?:n[ao]s?\s+|[àa]s\s+)?(\#(ds)(?:\s+(?:e\s+)?\#(ds))+)\b"#),
+                  let re = try? NSRegularExpression(pattern: diasSemana, options: [.caseInsensitive]) {
+            let lista = g[1] ?? ""
+            let ns = lista as NSString
+            for m in re.matches(in: lista, range: NSRange(location: 0, length: ns.length)) {
+                if let d = diaSemana(ns.substring(with: m.range)), !diasRep.contains(d) { diasRep.append(d) }
+            }
+        }
+        if diasRep.count == 7 { diasRep = []; repeticao = "diario" }
+        if !diasRep.isEmpty { repeticao = "dias" }
+
+        if repeticao != "nunca" {
+            // já decidido acima
+        } else if L.tirar(#"\btod[oa]s?\s+(?:os\s+|o\s+)?dias?\b|\bdiariamente\b"#) != nil {
             repeticao = "diario"
         } else if let g = L.tirar(#"\btod[oa]s?\s+(?:as\s+|os\s+)?(\#(diasSemana))s?(?:[- ]feiras?)?\b"#) {
             repeticao = "semanal"
@@ -275,7 +302,20 @@ enum InterpretadorLocal {
                 quando = d
             }
         } else if repeticao != "nunca" {
-            quando = hoje
+            quando = pedeLembrete ? em(hoje, 9, 0) : hoje
+            temHora = pedeLembrete
+        }
+
+        // "De segunda a sexta": começa no próximo dia escolhido que ainda não passou
+        if !diasRep.isEmpty, let q = quando {
+            let h = cal.component(.hour, from: q)
+            let mi = cal.component(.minute, from: q)
+            for n in 0...7 {
+                let d = dia(n)
+                guard diasRep.contains(cal.component(.weekday, from: d)) else { continue }
+                let t = temHora ? em(d, h, mi) : d
+                if !temHora || t > agora { quando = t; break }
+            }
         }
 
         // Título: o que sobrou da frase, sem "me lembra de", "quero que você", etc.
@@ -288,22 +328,51 @@ enum InterpretadorLocal {
                 L.texto = ns.substring(from: fim)
             }
         }
-        let enchimentos = [
-            #"\b(?:cria|crie|criar|coloca|coloque|colocar|bota|bote|p[õo]e|ponha|define|marca|marque|agenda|agende|faz|fa[çc]a|adiciona|adicione|salva|salve)\s+(?:(?:pra|para)\s+mim\s+)?(?:(?:um|uma)\s+)?(?:alarme|lembrete|tarefa|despertador|notifica[çc][ãa]o)\b(?:\s+(?:de|para|pra|que))?"#,
+        // "…com o nome de mandar mensagem pro Claude": o título é exatamente o que vem depois.
+        // "…com a palavra plano" / um segundo "com o nome plano": é o conteúdo da mensagem, vai entre aspas
+        // → Mandar mensagem pro Claude "plano"
+        if let re = try? NSRegularExpression(
+            pattern: #"\b(?:(com\s+o\s+(?:nome|t[íi]tulo)|com\s+(?:nome|t[íi]tulo)|chamad[oa]|que\s+se\s+chama|com\s+a\s+descri[çc][ãa]o)|(com\s+a\s+palavra|com\s+o\s+texto|escrito|dizendo))\b(?:\s+de\b)?"#,
+            options: [.caseInsensitive]) {
+            let ns = L.texto as NSString
+            let achados = re.matches(in: L.texto, range: NSRange(location: 0, length: ns.length))
+            if let primeiro = achados.first {
+                func trecho(_ i: Int) -> String {
+                    let ini = achados[i].range.location + achados[i].range.length
+                    let fim = i + 1 < achados.count ? achados[i + 1].range.location : ns.length
+                    return ns.substring(with: NSRange(location: ini, length: fim - ini))
+                        .trimmingCharacters(in: CharacterSet(charactersIn: " .,!?"))
+                }
+                let primeiroEhNome = primeiro.range(at: 1).location != NSNotFound
+                var nome = primeiroEhNome ? trecho(0) : ns.substring(to: primeiro.range.location)
+                let conteudo = achados.indices
+                    .filter { $0 > 0 || !primeiroEhNome }
+                    .map(trecho)
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                if !conteudo.isEmpty { nome += " \"\(conteudo)\"" }
+                if !nome.trimmingCharacters(in: .whitespaces).isEmpty { L.texto = nome }
+            }
+        }
+        var enchimentos = [
+            #"\b(?:cria|crie|criar|coloca|coloque|colocar|bota|bote|p[õo]e|ponha|define|marca|marque|agenda|agende|faz|fa[çc]a|adiciona|adicione|salva|salve)\s+(?:(?:pra|para)\s+mim\s+)?(?:(?:um|uma|uns|umas)\s+)?(?:alarmes?|lembretes?|tarefas?|despertador(?:es)?|notifica[çc](?:[ãa]o|[õo]es))\b(?:\s+(?:de|para|pra|que))?"#,
             #"\b(?:um|uma)\s+(?:alarme|despertador|lembrete|tarefa)\b(?:\s+(?:de|para|pra))?"#,
             #"\b(?:pra|para)\s+mim\b"#,
             #"\b(?:beleza|valeu|obrigad[oa]|t[áa]\s+bom|pode\s+ser|fechou)\b"#,
             #"\b(?:ei|oi|ok|ol[áa])\b"#,
             #"\b(?:eu\s+)?(?:quero|queria|gostaria)\s+(?:que\s+)?(?:voc[êe]\s+|vc\s+)?(?:me\s+)?(?:lembr[ae]s?|avis[ae]s?)\b(?:\s+(?:de|que|para|pra))?"#,
             #"\b(?:me\s+)?(?:lembre-me|lembr[ae]r?|avis[ae]r?)\b(?:\s+(?:de|que|para|pra))?"#,
+            #"\b(?:eu\s+)?(?:quero|queria|gostaria)\s+que\s+(?:voc[êe]|vc)\b"#,
             #"\bn[ãa]o\s+(?:me\s+)?deix[ae]r?\s+(?:eu\s+)?esquecer\b(?:\s+de)?"#,
             #"\bn[ãa]o\s+(?:posso\s+)?esquecer\b(?:\s+de)?"#,
-            #"\b(?:um\s+)?lembrete\b(?:\s+(?:de|para|pra))?"#,
+            #"\b(?:um\s+|uns\s+)?lembretes?\b(?:\s+(?:de|para|pra))?"#,
             #"\b(?:eu\s+)?(?:preciso|tenho\s+que|tenho\s+de)\b(?:\s+de)?"#,
             #"\bpor\s+favor\b"#,
             #"\bmais\s+ou\s+menos\b"#,
             #"\bpor\s+volta\b(?:\s+d[ea]s?)?"#,
         ]
+        // "…de segunda a sexta todo das 7h30": sobra o "todo"
+        if repeticao != "nunca" { enchimentos.append(#"\btod[oa]s?\b(?:\s+(?:os|as)\b)?"#) }
         for e in enchimentos { while L.tirar(e) != nil {} }
         var palavras = L.texto.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         let soltas: Set<String> = ["para", "pra", "pro", "as", "a", "no", "na", "do", "da", "de", "em", "dia", "o", "e",
@@ -332,7 +401,20 @@ enum InterpretadorLocal {
         var resumo = "Tarefa anotada!"
         if let q = quando {
             var diaFalado: String
-            if repeticao == "diario" {
+            if repeticao == "dias" {
+                let d = Set(diasRep)
+                let nomes = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
+                if d == Set(2...6) {
+                    diaFalado = "de segunda a sexta"
+                } else if d == Set(2...7) {
+                    diaFalado = "de segunda a sábado"
+                } else if d == [1, 7] {
+                    diaFalado = "no fim de semana"
+                } else {
+                    let lista = diasRep.sorted { ($0 + 5) % 7 < ($1 + 5) % 7 }.map { nomes[$0 - 1] }
+                    diaFalado = "toda " + (lista.count > 1 ? lista.dropLast().joined(separator: ", ") + " e " + lista.last! : lista[0])
+                }
+            } else if repeticao == "diario" {
                 diaFalado = "todo dia"
             } else if repeticao == "semanal" {
                 let nomes = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
@@ -352,7 +434,9 @@ enum InterpretadorLocal {
         }
 
         return Interpretacao(resumo: resumo, programa: "",
-                             tarefas: [.init(titulo: titulo, data: dataTexto, hora: horaTexto, repeticao: repeticao)],
+                             tarefas: [.init(titulo: titulo, data: dataTexto, hora: horaTexto,
+                                             repeticao: diasRep.isEmpty ? repeticao
+                                                 : "dias:" + diasRep.sorted().map(String.init).joined(separator: ","))],
                              habitos: [])
     }
 }
