@@ -20,7 +20,15 @@ jobs:
       - name: Testar o interpretador de voz (datas e horários)
         run: |
           cat Rotina/Interpretador.swift Testes/TesteInterpretador.swift > /tmp/teste.swift
-          TZ=America/Sao_Paulo swift /tmp/teste.swift
+          set +e
+          TZ=America/Sao_Paulo swift /tmp/teste.swift > /tmp/saida.txt 2>&1
+          status=$?
+          cat /tmp/saida.txt
+          # Falhas viram avisos públicos (dá pra ler sem login pela API do GitHub)
+          if [ $status -ne 0 ]; then
+            grep -E "error:|FALHOU|esperado|falharam" /tmp/saida.txt | head -40 | while IFS= read -r linha; do echo "::error::$linha"; done
+          fi
+          exit $status
 
       - name: Usar o Xcode 26 (precisa pro alarme do iOS 26)
         run: |
