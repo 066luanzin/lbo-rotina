@@ -19,6 +19,14 @@ struct Bloco: Identifiable, Hashable {
     func acontecendo(_ agora: Date = .now) -> Bool { inicio <= agora && agora < fim }
 }
 
+/// Um calendário da conta (ex.: "Rotina", "JL Ar Condicionado Sul", "Feriados")
+struct Calendario: Identifiable, Hashable {
+    let id: String
+    let nome: String
+    let conta: String
+    let cor: Color
+}
+
 /// Lê a agenda do iPhone. Sem API e sem custo: o próprio iOS sincroniza o Google Agenda.
 @MainActor
 @Observable
@@ -28,6 +36,8 @@ final class Agenda {
     private let store = EKEventStore()
     /// Muda quando a agenda é relida, pra atualizar as telas
     var versao = 0
+    /// Calendários escolhidos no Perfil (nil = todos)
+    var escolhidos: Set<String>? = (UserDefaults.standard.array(forKey: "calendariosAgenda") as? [String]).map { Set($0) }
     var autorizada: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     var negada: Bool {
         let s = EKEventStore.authorizationStatus(for: .event)
@@ -46,10 +56,30 @@ final class Agenda {
         versao += 1
     }
 
-    /// Eventos com horário entre as datas (ignora dia inteiro, aniversários e feriados)
+    /// Todos os calendários da conta (menos aniversários e feriados)
+    func calendarios() -> [Calendario] {
+        guard autorizada else { return [] }
+        return store.calendars(for: .event)
+            .filter { $0.type != .birthday && $0.type != .subscription }
+            .map { Calendario(id: $0.calendarIdentifier, nome: $0.title, conta: $0.source.title, cor: Color(cgColor: $0.cgColor)) }
+            .sorted { ($0.conta, $0.nome) < ($1.conta, $1.nome) }
+    }
+
+    func mostra(_ id: String) -> Bool { escolhidos?.contains(id) ?? true }
+
+    func alternar(_ id: String) {
+        var s = escolhidos ?? Set(calendarios().map(\.id))
+        if s.contains(id) { s.remove(id) } else { s.insert(id) }
+        escolhidos = s
+        UserDefaults.standard.set(Array(s), forKey: "calendariosAgenda")
+        versao += 1
+    }
+
+    /// Eventos com horário entre as datas (só dos calendários escolhidos; ignora dia inteiro, aniversários e feriados)
     func blocos(de inicio: Date, ate fim: Date) -> [Bloco] {
         guard autorizada else { return [] }
-        let calendarios = store.calendars(for: .event).filter { $0.type != .birthday && $0.type != .subscription }
+        let calendarios = store.calendars(for: .event)
+            .filter { $0.type != .birthday && $0.type != .subscription && mostra($0.calendarIdentifier) }
         guard !calendarios.isEmpty else { return [] }
         let busca = store.predicateForEvents(withStart: inicio, end: fim, calendars: calendarios)
         return store.events(matching: busca)

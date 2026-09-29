@@ -202,6 +202,18 @@ struct PerfilView: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                 if agenda.autorizada {
                     let _ = agenda.versao
+                    let todos = agenda.calendarios()
+                    NavigationLink {
+                        CalendariosView()
+                    } label: {
+                        HStack {
+                            Text("Calendários que aparecem")
+                            Spacer()
+                            Text("\(todos.filter { agenda.mostra($0.id) }.count) de \(todos.count)")
+                                .foregroundStyle(Color.texto2)
+                        }
+                    }
+                    .foregroundStyle(.white)
                     Toggle("Avisar antes de cada bloco", isOn: $avisoBlocos)
                         .tint(Color.verde)
                         .onChange(of: avisoBlocos) { _, _ in Notificacoes.reagendar(ctx) }
