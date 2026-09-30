@@ -22,7 +22,7 @@ struct PerfilView: View {
     @AppStorage("minutosAntesBloco") private var minutosAntes = 5
     @AppStorage("blocosComAlarme") private var blocosComAlarme = "Alinhamento, Fechamento"
     @AppStorage("lembreteCheckin") private var lembreteCheckin = true
-    @AppStorage("horaCheckin") private var horaCheckin = "17:00"
+    @AppStorage("horasCheckin") private var horasCheckin = ""
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
 
@@ -56,6 +56,27 @@ struct PerfilView: View {
                 }
             }
         }
+    }
+
+    // MARK: Horários do lembrete de check-in
+
+    private func dataDe(_ h: String) -> Date {
+        let hm = h.split(separator: ":").compactMap { Int($0) }
+        return Calendar.current.date(bySettingHour: hm.first ?? 17, minute: hm.count > 1 ? hm[1] : 0,
+                                     second: 0, of: .now) ?? .now
+    }
+
+    private func trocarHora(_ i: Int, _ data: Date) {
+        var horas = Notificacoes.horasCheckin()
+        guard horas.indices.contains(i) else { return }
+        let cal = Calendar.current
+        horas[i] = String(format: "%02d:%02d", cal.component(.hour, from: data), cal.component(.minute, from: data))
+        salvarHoras(horas)
+    }
+
+    private func salvarHoras(_ horas: [String]) {
+        horasCheckin = Array(Set(horas)).sorted().joined(separator: ",")
+        Notificacoes.reagendar(ctx)
     }
 
     private var nivel: some View {
@@ -240,13 +261,34 @@ struct PerfilView: View {
                         .tint(Color.verde)
                         .onChange(of: lembreteCheckin) { _, _ in Notificacoes.reagendar(ctx) }
                     if lembreteCheckin {
-                        Picker("Horário do lembrete", selection: $horaCheckin) {
-                            ForEach(["12:00", "16:30", "17:00", "17:30", "18:00", "19:00", "20:00", "21:00"], id: \.self) {
-                                Text($0).tag($0)
+                        let _ = horasCheckin
+                        let horas = Notificacoes.horasCheckin()
+                        ForEach(Array(horas.enumerated()), id: \.offset) { i, h in
+                            HStack {
+                                DatePicker("Lembrete \(i + 1)",
+                                           selection: Binding(get: { dataDe(h) }, set: { trocarHora(i, $0) }),
+                                           displayedComponents: .hourAndMinute)
+                                if horas.count > 1 {
+                                    Button {
+                                        salvarHoras(horas.enumerated().filter { $0.offset != i }.map(\.element))
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundStyle(Color.vermelho)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
                         }
-                        .pickerStyle(.menu)
-                        .onChange(of: horaCheckin) { _, _ in Notificacoes.reagendar(ctx) }
+                        Button {
+                            // Próximo horário sugerido: 3h depois do último (ou 12:00)
+                            let ultimo = horas.last.flatMap { Int($0.prefix(2)) } ?? 9
+                            salvarHoras(horas + [String(format: "%02d:00", min(22, ultimo + 3))])
+                        } label: {
+                            Label("Adicionar horário", systemImage: "plus.circle.fill")
+                                .foregroundStyle(Color.verde)
+                        }
+                        .buttonStyle(.plain)
                     }
                 } else {
                     Text(agenda.negada

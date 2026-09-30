@@ -110,12 +110,15 @@ enum Notificacoes {
 
         // Lembrete de check-in, de segunda a sexta: "Faltam 4 blocos e 1 tarefa sem check-in"
         if UserDefaults.standard.object(forKey: "lembreteCheckin") as? Bool ?? true {
-            let hm = (UserDefaults.standard.string(forKey: "horaCheckin") ?? "17:00")
-                .split(separator: ":").compactMap { Int($0) }
             let feitos = (try? ctx.fetch(FetchDescriptor<BlocoFeito>())) ?? []
             let idsFeitos = Set(feitos.map(\.blocoID))
             let placar = Placar(habitos: [], registros: [], tarefas: tarefas)
-            for n in 0..<7 where hm.count == 2 {
+            let horarios = horasCheckin().compactMap { h -> [Int]? in
+                let hm = h.split(separator: ":").compactMap { Int($0) }
+                return hm.count == 2 ? hm : nil
+            }
+            for n in 0..<7 {
+                for (i, hm) in horarios.enumerated() {
                 guard let d = cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: agora)),
                       (2...6).contains(cal.component(.weekday, from: d)),
                       let quando = cal.date(bySettingHour: hm[0], minute: hm[1], second: 0, of: d),
@@ -136,9 +139,10 @@ enum Notificacoes {
                     c.body = "Já deu check-in nos blocos e tarefas de hoje? Marca o que você fez."
                 }
                 pedidos.append(UNNotificationRequest(
-                    identifier: "checkin-\(n)", content: c,
+                    identifier: "checkin-\(n)-\(i)", content: c,
                     trigger: UNCalendarNotificationTrigger(
                         dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false)))
+                }
             }
         }
 
@@ -167,6 +171,14 @@ enum Notificacoes {
             center.removePendingNotificationRequests(withIdentifiers: ids)
             for p in novos { center.add(p) }
         }
+    }
+
+    /// Horários do lembrete de check-in, ex.: ["12:00", "17:00"]
+    static func horasCheckin() -> [String] {
+        let d = UserDefaults.standard
+        let lista = (d.string(forKey: "horasCheckin") ?? "")
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return lista.isEmpty ? [d.string(forKey: "horaCheckin") ?? "17:00"] : lista
     }
 
     private static func frase(_ h: Habito) -> String {
