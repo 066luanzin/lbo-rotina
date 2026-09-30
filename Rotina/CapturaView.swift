@@ -3,7 +3,9 @@ import SwiftData
 
 /// Tela de voz: "Fale uma tarefa ou lembrete…" / "Me conta sua dificuldade."
 struct CapturaView: View {
-    let modo: ModoCaptura
+    @State private var modo: ModoCaptura
+    @Query(sort: \Cliente.ordem) private var clientes: [Cliente]
+    @State private var notaCriada: Nota?
     @Environment(\.dismiss) private var fechar
     @Environment(\.modelContext) private var ctx
     @State private var voz = Voz()
@@ -18,6 +20,44 @@ struct CapturaView: View {
 
     enum Etapa { case ouvindo, pensando, pronto }
 
+    init(modo: ModoCaptura) {
+        _modo = State(initialValue: modo)
+    }
+
+    private var icone: String {
+        switch modo {
+        case .tarefa: return "bolt.fill"
+        case .nota: return "note.text"
+        case .dificuldade: return "sparkles"
+        }
+    }
+
+    private var tituloModo: String {
+        switch modo {
+        case .tarefa: return "Captura rápida"
+        case .nota: return "Nota de cliente"
+        case .dificuldade: return "Programa de hábitos"
+        }
+    }
+
+    /// Chips pra trocar o modo antes de salvar
+    private var seletorModo: some View {
+        HStack(spacing: 8) {
+            ForEach([ModoCaptura.tarefa, .nota, .dificuldade]) { m in
+                Text(m == .tarefa ? "Tarefa" : (m == .nota ? "Nota" : "Programa"))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(modo == m ? Color.fundo : .white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(modo == m ? Color.verde : Color.cartao2, in: Capsule())
+                    .onTapGesture {
+                        Haptico.leve()
+                        modo = m
+                    }
+            }
+        }
+    }
+
     private var fala: String {
         (digitando ? textoDigitado : voz.texto).trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -25,6 +65,9 @@ struct CapturaView: View {
     var body: some View {
         VStack(spacing: 0) {
             topo
+            if etapa == .ouvindo {
+                seletorModo.padding(.top, 14)
+            }
             Spacer()
             switch etapa {
             case .ouvindo: ouvindo
@@ -53,13 +96,13 @@ struct CapturaView: View {
     private var topo: some View {
         HStack {
             HStack(spacing: 10) {
-                Image(systemName: modo == .tarefa ? "bolt.fill" : "sparkles")
+                Image(systemName: icone)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color.fundo)
                     .frame(width: 30, height: 30)
                     .background(Color.verde, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(modo == .tarefa ? "Captura rápida" : "Programa de hábitos")
+                    Text(tituloModo)
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                     Text(voz.ouvindo ? "ouvindo…" : (etapa == .pensando ? "pensando…" : "pronto"))
                         .font(.system(size: 12, design: .rounded))
@@ -105,6 +148,12 @@ struct CapturaView: View {
                     .foregroundStyle(Color.vermelho)
                     .multilineTextAlignment(.center)
             }
+            if modo == .nota && voz.texto.isEmpty && !digitando {
+                Text("Ex.: \"JA Climatização: pausei a campanha de pesquisa\" ou \"ideia de vídeo: erro de orçamento baixo em PMax\"")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(Color.texto2)
+                    .multilineTextAlignment(.center)
+            }
             if modo == .dificuldade && voz.texto.isEmpty && !digitando {
                 Text("Ex.: \"não consigo parar de falar palavrão\", \"durmo muito tarde\", \"fico muito no celular\"")
                     .font(.system(size: 13, design: .rounded))
@@ -115,7 +164,11 @@ struct CapturaView: View {
     }
 
     private var dica: String {
-        modo == .tarefa ? "Fale uma tarefa ou lembrete…" : "Me conta sua dificuldade."
+        switch modo {
+        case .tarefa: return "Fale uma tarefa ou lembrete…"
+        case .nota: return "Fale o cliente e o que foi feito…"
+        case .dificuldade: return "Me conta sua dificuldade."
+        }
     }
 
     // MARK: Etapa 2: pensando
@@ -125,7 +178,7 @@ struct CapturaView: View {
             ProgressView()
                 .controlSize(.large)
                 .tint(Color.verde)
-            Text(modo == .tarefa ? "Anotando…" : "Lendo o que você falou\ne montando os hábitos…")
+            Text(modo == .dificuldade ? "Lendo o que você falou\ne montando os hábitos…" : "Anotando…")
                 .titulo(22)
                 .multilineTextAlignment(.center)
             Text("\"\(fala)\"")
@@ -143,7 +196,24 @@ struct CapturaView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 52))
                 .foregroundStyle(Color.verde)
-            if !criados.isEmpty {
+            if let n = notaCriada {
+                Text(n.tipo == "ideia" ? "Ideia salva!" : "Nota salva!").titulo(24)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(n.tipo == "ideia" ? "IDEIA DE VÍDEO" : (n.cliente.isEmpty ? "GERAL" : n.cliente.uppercased()))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(n.tipo == "ideia" ? Color.orange : Color.verde)
+                    Text(n.texto).font(.system(size: 16, design: .rounded))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cartao(14)
+                if n.cliente.isEmpty && n.tipo == "nota" {
+                    Text("Não reconheci o cliente. Confira os nomes e apelidos em Notas > 👥.")
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                        .multilineTextAlignment(.center)
+                }
+            } else if !criados.isEmpty {
                 Text(resultado?.programa.isEmpty == false ? resultado!.programa.uppercased() : "PROGRAMA PRONTO")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .tracking(1.5)
@@ -212,7 +282,7 @@ struct CapturaView: View {
         VStack(spacing: 12) {
             switch etapa {
             case .ouvindo:
-                Button(modo == .tarefa ? "Salvar tarefa" : "Montar meu programa") {
+                Button(modo == .tarefa ? "Salvar tarefa" : (modo == .nota ? "Salvar nota" : "Montar meu programa")) {
                     Task { await enviar() }
                 }
                 .buttonStyle(EstiloPrincipal())
@@ -260,6 +330,17 @@ struct CapturaView: View {
         aviso = nil
         withAnimation { etapa = .pensando }
 
+        if modo == .nota {
+            let n = InterpretadorLocal.nota(texto, clientes: clientes.filter(\.ativo).map(\.info))
+            let nova = Nota(texto: n.texto, cliente: n.cliente, tipo: n.tipo)
+            ctx.insert(nova)
+            try? ctx.save()
+            notaCriada = nova
+            Haptico.sucesso()
+            withAnimation(.spring) { etapa = .pronto }
+            return
+        }
+
         var r: Interpretacao
         if IA.temChave {
             do {
@@ -287,6 +368,7 @@ struct CapturaView: View {
     }
 
     private func desfazer() {
+        if let n = notaCriada { ctx.delete(n) }
         criadas.forEach { ctx.delete($0) }
         criados.forEach { ctx.delete($0) }
         try? ctx.save()

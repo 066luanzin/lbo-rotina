@@ -88,6 +88,27 @@ checar("toda sexta às 18h pagar o Pedro", titulo: "Pagar o Pedro", data: "2026-
 checar("comprar pão", titulo: "Comprar pão", data: "", hora: "")
 checar("hoje à noite estudar inglês", titulo: "Estudar inglês", data: "2026-09-28", hora: "20:00")
 
+// Notas por cliente
+func checarNota(_ fala: String, cliente: String, texto: String, tipo: String = "nota") {
+    let n = InterpretadorLocal.nota(fala, clientes: InterpretadorLocal.clientesPadrao)
+    let ok = n.cliente == cliente && n.texto == texto && n.tipo == tipo
+    print(ok ? "ok     " : "FALHOU ", "nota \"\(fala)\" -> [\(n.cliente)] \"\(n.texto)\" \(n.tipo)")
+    if !ok {
+        print("        esperado: [\(cliente)] \"\(texto)\" \(tipo)")
+        falhas += 1
+    }
+}
+checarNota("JA Climatização: pausei a campanha de pesquisa e subi o lance",
+           cliente: "JA Climatização", texto: "Pausei a campanha de pesquisa e subi o lance")
+checarNota("Na Climax subi o orçamento pra 50 reais", cliente: "Climax Ar Condicionado", texto: "Subi o orçamento pra 50 reais")
+checarNota("ideia de vídeo: erro de colocar orçamento baixo em PMax", cliente: "",
+           texto: "Erro de colocar orçamento baixo em PMax", tipo: "ideia")
+checarNota("já fiz o relatório do mês", cliente: "", texto: "Já fiz o relatório do mês")
+checarNota("gás express pediu pra pausar os anúncios", cliente: "Gás Express", texto: "Pediu pra pausar os anúncios")
+checarNota("anota aí: JL aprovou o criativo novo", cliente: "JL Ar Condicionado Sul", texto: "Aprovou o criativo novo")
+checarNota("pausei a campanha da Ludmila", cliente: "Ludmila Furtado", texto: "Pausei a campanha")
+checarNota("cliente Vtech: trocar o número do WhatsApp no anúncio", cliente: "Vtech Cell", texto: "Trocar o número do WhatsApp no anúncio")
+
 // Programas sem IA
 let p = InterpretadorLocal.interpretar("não consigo parar de falar palavrão", modo: .dificuldade)
 if p.habitos.count == 3 && p.habitos[0].titulo == "Ficar sem palavrão" {

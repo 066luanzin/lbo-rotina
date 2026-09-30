@@ -48,7 +48,7 @@ enum IA {
 
         let pedido: String
         switch modo {
-        case .tarefa:
+        case .tarefa, .nota:
             pedido = """
             A pessoa falou isto no modo "tarefa ou lembrete":
             "\(fala)"

@@ -17,7 +17,8 @@ final class AppState {
 enum Banco {
     static let container: ModelContainer = {
         do {
-            return try ModelContainer(for: Tarefa.self, Habito.self, Registro.self, BlocoFeito.self)
+            return try ModelContainer(for: Tarefa.self, Habito.self, Registro.self, BlocoFeito.self,
+                                      ItemChecklist.self, ItemMarcado.self, Cliente.self, Nota.self)
         } catch {
             fatalError("Não consegui abrir o banco: \(error)")
         }
@@ -104,6 +105,7 @@ struct RaizView: View {
                 _ = await Notificacoes.pedirPermissao()
             }
             if !nome.isEmpty && Alarmes.ligado { await Alarmes.pedirPermissao() }
+            Seeds.clientes(ctx)
             Notificacoes.reagendar(ctx)
         }
         .onChange(of: fase) { _, nova in
@@ -128,9 +130,12 @@ struct MainView: View {
             TarefasView()
                 .tabItem { Label("Tarefas", systemImage: "checklist") }
                 .tag(1)
+            NotasView()
+                .tabItem { Label("Notas", systemImage: "note.text") }
+                .tag(2)
             PerfilView()
                 .tabItem { Label("Perfil", systemImage: "person.crop.circle") }
-                .tag(2)
+                .tag(3)
         }
     }
 }

@@ -15,6 +15,10 @@ struct HomeView: View {
     @State private var cronometro: Habito?
     @State private var agenda = Agenda.shared
     @State private var verConcluidos = false
+    @State private var detalhe: Bloco?
+    @State private var fechamento = false
+    @Query private var itensChecklist: [ItemChecklist]
+    @Query private var marcados: [ItemMarcado]
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas, feitos: feitos) }
     private var hoje: Bool { Calendar.current.isDateInToday(dia) }
@@ -26,6 +30,9 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         cabecalho
                         cartaoAgora
+                        if hoje && Calendar.current.component(.hour, from: .now) >= 16 {
+                            cartaoFechamento
+                        }
                         if habitos.isEmpty { cartaoPrograma }
                         semana
                         resumo
@@ -53,6 +60,8 @@ struct HomeView: View {
             }
             .navigationDestination(for: Habito.self) { HabitoDetalheView(habito: $0) }
             .sheet(item: $cronometro) { CronometroView(habito: $0) }
+            .sheet(item: $detalhe) { BlocoDetalheView(bloco: $0) }
+            .sheet(isPresented: $fechamento) { FechamentoView(dia: .now) }
             // Mudou algo no Google Agenda: relê e refaz os avisos
             .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in
                 agenda.recarregar()
@@ -103,14 +112,41 @@ struct HomeView: View {
 
     /// Marca/desmarca o check-in de um bloco da agenda
     private func checkin(_ b: Bloco) {
-        if let existente = feitos.first(where: { $0.blocoID == b.id }) {
-            ctx.delete(existente)
-        } else {
-            ctx.insert(BlocoFeito(blocoID: b.id, titulo: b.titulo, inicio: b.inicio))
-            Haptico.sucesso()
+        Acoes.checkinBloco(b, ctx: ctx)
+    }
+
+    /// "2/4" da checklist do bloco naquele dia (nil se o bloco não tem checklist)
+    private func progressoChecklist(_ b: Bloco) -> String? {
+        let chave = Checklist.chave(b.titulo)
+        let itens = itensChecklist.filter { $0.chave == chave }
+        guard !itens.isEmpty else { return nil }
+        let ok = itens.filter { i in
+            marcados.contains { $0.itemID == i.id && Calendar.current.isDate($0.dia, inSameDayAs: b.inicio) }
+        }.count
+        return "\(ok)/\(itens.count)"
+    }
+
+    private var cartaoFechamento: some View {
+        Button {
+            fechamento = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Color.verde)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Fechamento do dia").font(.system(size: 15, weight: .bold, design: .rounded))
+                    Text("Gera o resumo pronto pra mandar pro Claude")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.texto2)
+            }
+            .foregroundStyle(.white)
+            .cartao(14)
         }
-        try? ctx.save()
-        Notificacoes.reagendar(ctx)
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -159,9 +195,9 @@ struct HomeView: View {
                         }
                     }
                     ForEach(visiveis) { b in
-                        LinhaBloco(bloco: b, feito: ids.contains(b.id), podeMarcar: !futuro) {
-                            checkin(b)
-                        }
+                        LinhaBloco(bloco: b, feito: ids.contains(b.id), podeMarcar: !futuro,
+                                   progresso: progressoChecklist(b),
+                                   marcar: { checkin(b) }, abrir: { detalhe = b })
                         if b.id != visiveis.last?.id {
                             Divider().overlay(Color.borda).padding(.leading, 22)
                         }
@@ -601,7 +637,11 @@ struct LinhaBloco: View {
     let bloco: Bloco
     var feito = false
     var podeMarcar = true
+    /// "2/4" da checklist, se tiver
+    var progresso: String? = nil
     var marcar: () -> Void = {}
+    /// Toque no bloco: abre a checklist
+    var abrir: () -> Void = {}
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { t in
@@ -625,9 +665,14 @@ struct LinhaBloco: View {
                         .strikethrough(feito)
                         .foregroundStyle(feito ? Color.texto2 : .white)
                         .lineLimit(1)
-                    Text(bloco.horario)
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(Color.texto2)
+                    HStack(spacing: 6) {
+                        Text(bloco.horario)
+                        if let p = progresso {
+                            Label(p, systemImage: "checklist").labelStyle(.titleAndIcon)
+                        }
+                    }
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(Color.texto2)
                 }
                 Spacer()
                 if agora {
@@ -645,6 +690,8 @@ struct LinhaBloco: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+            .onTapGesture { abrir() }
             .opacity(passou && !feito ? 0.6 : 1)
         }
     }

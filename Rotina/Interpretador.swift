@@ -29,6 +29,8 @@ struct Interpretacao: Codable {
 enum ModoCaptura: String, Identifiable {
     /// "Fale uma tarefa ou lembrete"
     case tarefa
+    /// "JA Climatização: pausei a campanha…" / "ideia de vídeo: …"
+    case nota
     /// "Me conta sua dificuldade" → programa de hábitos
     case dificuldade
     var id: String { rawValue }
@@ -38,7 +40,7 @@ enum ModoCaptura: String, Identifiable {
 enum InterpretadorLocal {
     static func interpretar(_ fala: String, modo: ModoCaptura, agora: Date = Date()) -> Interpretacao {
         switch modo {
-        case .tarefa: return tarefa(fala, agora: agora)
+        case .tarefa, .nota: return tarefa(fala, agora: agora)
         case .dificuldade: return Programas.montar(fala)
         }
     }
@@ -438,6 +440,78 @@ enum InterpretadorLocal {
                                              repeticao: diasRep.isEmpty ? repeticao
                                                  : "dias:" + diasRep.sorted().map(String.init).joined(separator: ","))],
                              habitos: [])
+    }
+}
+
+// MARK: - Notas por cliente
+
+struct NotaEntendida: Equatable {
+    var cliente: String   // "" = geral
+    var texto: String
+    var tipo: String      // nota | ideia
+}
+
+struct ClienteInfo {
+    let nome: String
+    let apelidos: [String]
+    let gmb: Bool
+}
+
+extension InterpretadorLocal {
+    /// Clientes da agência (pasta clientes/ do ClaudePRO). Os apelidos cobrem como o reconhecimento de voz escreve.
+    static let clientesPadrao: [ClienteInfo] = [
+        ClienteInfo(nome: "JA Climatização", apelidos: ["ja climatizacao", "ja clima", "jota a"], gmb: true),
+        ClienteInfo(nome: "CA Macirlene", apelidos: ["macirlene", "ms santos", "ca macirlene"], gmb: true),
+        ClienteInfo(nome: "Climax Ar Condicionado", apelidos: ["climax"], gmb: true),
+        ClienteInfo(nome: "Gás Express", apelidos: ["gas express"], gmb: true),
+        ClienteInfo(nome: "Giselle Saggin", apelidos: ["giselle", "gisele", "saggin"], gmb: true),
+        ClienteInfo(nome: "JL Ar Condicionado Sul", apelidos: ["jl ar", "jl", "jota ele"], gmb: true),
+        ClienteInfo(nome: "Ludmila Furtado", apelidos: ["ludmila", "ludimila"], gmb: false),
+        ClienteInfo(nome: "Sara Carvalho", apelidos: ["sara carvalho", "sara", "sarah"], gmb: false),
+        ClienteInfo(nome: "Vtech Cell", apelidos: ["vtech", "v tech", "vitech", "vi tech"], gmb: false),
+    ]
+
+    /// "Na Climax subi o orçamento" → cliente Climax, texto "Subi o orçamento"
+    static func nota(_ fala: String, clientes: [ClienteInfo]) -> NotaEntendida {
+        let L = Leitor(fala.precomposedStringWithCanonicalMapping)
+        var tipo = "nota"
+        _ = L.tirar(#"^\s*(?:anot[ae]r?|nota|registr[ae]r?)(?:\s+(?:a[íi]|que))?\s*[:,\-–—]?\s*"#)
+        if L.tirar(#"^\s*(?:uma\s+|tive\s+uma\s+)?ideias?(?:\s+(?:de|pra|para)\s+(?:um\s+)?(?:v[íi]deos?|conte[úu]dos?|posts?|reels?|stor(?:y|ies)))?\s*[:,\-–—]?\s*"#) != nil {
+            tipo = "ideia"
+        }
+
+        // Cliente: o apelido mais longo que aparecer como palavra inteira
+        let original = L.texto as NSString
+        let dobrado = dobrar(L.texto) as NSString
+        var achado: (nome: String, faixa: NSRange)?
+        for c in clientes {
+            for a in [c.nome] + c.apelidos {
+                let alvo = NSRegularExpression.escapedPattern(for: dobrar(a))
+                guard !alvo.isEmpty, let re = try? NSRegularExpression(pattern: "\\b" + alvo + "\\b") else { continue }
+                if let m = re.firstMatch(in: dobrado as String, range: NSRange(location: 0, length: dobrado.length)),
+                   m.range.length > (achado?.faixa.length ?? 0) {
+                    achado = (c.nome, m.range)
+                }
+            }
+        }
+        var cliente = ""
+        var t = L.texto
+        if let a = achado {
+            cliente = a.nome
+            if dobrado.length == original.length {
+                t = original.replacingCharacters(in: a.faixa, with: " ")
+            }
+        }
+        // Conectores que sobraram: "Na  subi…", "Cliente  : …", "…da campanha da"
+        t = t.replacingOccurrences(of: #"^\s*(?:(?:no|na|do|da|pro|pra|para\s+[oa]|o|a)\s+)?(?:cliente\s+)?[:,\-–—]?\s*"#,
+                                   with: "", options: [.regularExpression, .caseInsensitive])
+        t = t.replacingOccurrences(of: #"\s+(?:no|na|do|da|pro|pra|para|de|o|a|cliente)\s*$"#,
+                                   with: "", options: [.regularExpression, .caseInsensitive])
+        t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " :,-–—"))
+        if t.isEmpty { t = fala.trimmingCharacters(in: .whitespacesAndNewlines) }
+        t = t.prefix(1).uppercased() + t.dropFirst()
+        return NotaEntendida(cliente: cliente, texto: t, tipo: tipo)
     }
 }
 
