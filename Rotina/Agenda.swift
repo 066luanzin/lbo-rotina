@@ -125,7 +125,11 @@ final class Agenda {
             .filter { !$0.isEmpty }
     }
 
+    /// Liga/desliga geral do alarme nos blocos (pra não disparar em lugar público)
+    static var alarmeBlocos: Bool { UserDefaults.standard.object(forKey: "alarmeBlocos") as? Bool ?? true }
+
     static func tocaAlarme(_ b: Bloco) -> Bool {
+        guard alarmeBlocos else { return false }
         let t = b.titulo.lowercased()
         return comAlarme.contains { t.contains($0) }
     }

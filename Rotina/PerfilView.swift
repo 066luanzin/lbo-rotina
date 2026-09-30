@@ -23,6 +23,7 @@ struct PerfilView: View {
     @AppStorage("blocosComAlarme") private var blocosComAlarme = "Alinhamento, Fechamento"
     @AppStorage("lembreteCheckin") private var lembreteCheckin = true
     @AppStorage("perguntarFimBloco") private var perguntarFimBloco = true
+    @AppStorage("alarmeBlocos") private var alarmeBlocos = true
     @AppStorage("horasCheckin") private var horasCheckin = ""
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
@@ -254,13 +255,26 @@ struct PerfilView: View {
                     Toggle("Perguntar \"Fez?\" no fim de cada bloco", isOn: $perguntarFimBloco)
                         .tint(Color.verde)
                         .onChange(of: perguntarFimBloco) { _, _ in Notificacoes.reagendar(ctx) }
-                    Text("Blocos que tocam alarme (parte do nome, separado por vírgula)")
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(Color.texto2)
-                    TextField("Alinhamento, Fechamento", text: $blocosComAlarme)
-                        .padding(10)
-                        .background(Color.cartao2, in: RoundedRectangle(cornerRadius: 10))
-                        .onSubmit { Notificacoes.reagendar(ctx) }
+                    Toggle(isOn: $alarmeBlocos) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Alarme nos blocos importantes")
+                            Text(alarmeBlocos ? "Toca igual despertador, mesmo no silencioso"
+                                              : "Desligado: só a notificação normal (respeita o silencioso)")
+                                .font(.system(size: 12, design: .rounded))
+                                .foregroundStyle(Color.texto2)
+                        }
+                    }
+                    .tint(Color.verde)
+                    .onChange(of: alarmeBlocos) { _, _ in Notificacoes.reagendar(ctx) }
+                    if alarmeBlocos {
+                        Text("Blocos que tocam alarme (parte do nome, separado por vírgula)")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(Color.texto2)
+                        TextField("Alinhamento, Fechamento", text: $blocosComAlarme)
+                            .padding(10)
+                            .background(Color.cartao2, in: RoundedRectangle(cornerRadius: 10))
+                            .onSubmit { Notificacoes.reagendar(ctx) }
+                    }
                     Toggle("Lembrete de check-in (seg a sex)", isOn: $lembreteCheckin)
                         .tint(Color.verde)
                         .onChange(of: lembreteCheckin) { _, _ in Notificacoes.reagendar(ctx) }
