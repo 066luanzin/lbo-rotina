@@ -255,6 +255,7 @@ struct HomeView: View {
         let (f, t) = placar.progresso(em: dia)
         let ts = placar.tarefas(em: dia)
         let hs = habitos.filter { Calendar.current.startOfDay(for: $0.criadoEm) <= Calendar.current.startOfDay(for: dia) }
+        let futuro = Calendar.current.startOfDay(for: dia) > Calendar.current.startOfDay(for: .now)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(hoje ? "Hoje" : dia.formatted(.dateTime.weekday(.wide).day()).primeiraMaiuscula).titulo(20)
@@ -272,6 +273,11 @@ struct HomeView: View {
                         .background(Color.cartao2, in: Capsule())
                 }
                 .foregroundStyle(Color.verde)
+            }
+            if futuro {
+                Label("Dia futuro: o check-in libera no próprio dia.", systemImage: "lock.fill")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.texto2)
             }
             if hs.isEmpty && ts.isEmpty {
                 VStack(spacing: 8) {
@@ -291,7 +297,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
             }
             ForEach(ts) { t in
-                LinhaTarefa(tarefa: t, dia: dia)
+                LinhaTarefa(tarefa: t, dia: dia, podeMarcar: !futuro)
             }
         }
     }
@@ -436,6 +442,8 @@ struct LinhaHabito: View {
 struct LinhaTarefa: View {
     let tarefa: Tarefa
     let dia: Date
+    /// false em dia futuro: não deixa marcar antes da hora (só desmarcar, se marcou sem querer)
+    var podeMarcar = true
     @Environment(\.modelContext) private var ctx
     @State private var editar = false
 
@@ -447,10 +455,11 @@ struct LinhaTarefa: View {
             } label: {
                 Image(systemName: feita ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 26))
-                    .foregroundStyle(feita ? Color.verde : Color.white.opacity(0.35))
+                    .foregroundStyle(feita ? Color.verde : Color.white.opacity(podeMarcar ? 0.35 : 0.12))
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
+            .disabled(!podeMarcar && !feita)
             VStack(alignment: .leading, spacing: 3) {
                 Text(tarefa.titulo)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
