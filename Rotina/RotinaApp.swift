@@ -40,7 +40,7 @@ struct RotinaApp: App {
                     estado.captura = url.host == "programa" ? .dificuldade : .tarefa
                 }
         }
-        .modelContainer(for: [Tarefa.self, Habito.self, Registro.self])
+        .modelContainer(for: [Tarefa.self, Habito.self, Registro.self, BlocoFeito.self])
     }
 }
 

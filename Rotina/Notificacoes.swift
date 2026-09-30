@@ -108,6 +108,40 @@ enum Notificacoes {
             }
         }
 
+        // Lembrete de check-in, de segunda a sexta: "Faltam 4 blocos e 1 tarefa sem check-in"
+        if UserDefaults.standard.object(forKey: "lembreteCheckin") as? Bool ?? true {
+            let hm = (UserDefaults.standard.string(forKey: "horaCheckin") ?? "17:00")
+                .split(separator: ":").compactMap { Int($0) }
+            let feitos = (try? ctx.fetch(FetchDescriptor<BlocoFeito>())) ?? []
+            let idsFeitos = Set(feitos.map(\.blocoID))
+            let placar = Placar(habitos: [], registros: [], tarefas: tarefas)
+            for n in 0..<7 where hm.count == 2 {
+                guard let d = cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: agora)),
+                      (2...6).contains(cal.component(.weekday, from: d)),
+                      let quando = cal.date(bySettingHour: hm[0], minute: hm[1], second: 0, of: d),
+                      quando > agora else { continue }
+                let c = UNMutableNotificationContent()
+                c.title = "Check-in do dia ✅"
+                c.sound = .default
+                if n == 0 {
+                    // Hoje dá pra contar o que falta de verdade
+                    let blocosFaltando = Agenda.shared.blocos(do: d).filter { $0.inicio < quando && !idsFeitos.contains($0.id) }.count
+                    let tarefasFaltando = placar.tarefas(em: d).filter { !$0.feita(em: d) }.count
+                    if blocosFaltando + tarefasFaltando == 0 { continue }
+                    var partes: [String] = []
+                    if blocosFaltando > 0 { partes.append(blocosFaltando == 1 ? "1 bloco" : "\(blocosFaltando) blocos") }
+                    if tarefasFaltando > 0 { partes.append(tarefasFaltando == 1 ? "1 tarefa" : "\(tarefasFaltando) tarefas") }
+                    c.body = "Faltam \(partes.joined(separator: " e ")) sem check-in. Bora marcar o que você já fez?"
+                } else {
+                    c.body = "Já deu check-in nos blocos e tarefas de hoje? Marca o que você fez."
+                }
+                pedidos.append(UNNotificationRequest(
+                    identifier: "checkin-\(n)", content: c,
+                    trigger: UNCalendarNotificationTrigger(
+                        dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false)))
+            }
+        }
+
         // "Em 5 min: Operação (piores)" antes de cada bloco, até completar o limite do iPhone
         if Agenda.avisarAntes {
             let antes = Agenda.minutosAntes

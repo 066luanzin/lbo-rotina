@@ -9,12 +9,13 @@ struct HomeView: View {
     @Query(sort: \Habito.ordem) private var habitos: [Habito]
     @Query private var registros: [Registro]
     @Query private var tarefas: [Tarefa]
+    @Query private var feitos: [BlocoFeito]
     @AppStorage("nome") private var nome = ""
     @State private var dia = Date.now
     @State private var cronometro: Habito?
     @State private var agenda = Agenda.shared
 
-    private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
+    private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas, feitos: feitos) }
     private var hoje: Bool { Calendar.current.isDateInToday(dia) }
 
     var body: some View {
@@ -93,16 +94,37 @@ struct HomeView: View {
         }
     }
 
+    /// Marca/desmarca o check-in de um bloco da agenda
+    private func checkin(_ b: Bloco) {
+        if let existente = feitos.first(where: { $0.blocoID == b.id }) {
+            ctx.delete(existente)
+        } else {
+            ctx.insert(BlocoFeito(blocoID: b.id, titulo: b.titulo, inicio: b.inicio))
+            Haptico.sucesso()
+        }
+        try? ctx.save()
+        Notificacoes.reagendar(ctx)
+    }
+
     @ViewBuilder
     private var agendaDoDia: some View {
         let _ = agenda.versao
         let blocos = agenda.blocos(do: dia)
         if !blocos.isEmpty {
+            let ids = Set(feitos.map(\.blocoID))
+            let futuro = Calendar.current.startOfDay(for: dia) > Calendar.current.startOfDay(for: .now)
             VStack(alignment: .leading, spacing: 10) {
-                Text("Agenda").titulo(20)
+                HStack {
+                    Text("Agenda").titulo(20)
+                    Text("\(blocos.filter { ids.contains($0.id) }.count)/\(blocos.count)")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.texto2)
+                }
                 VStack(spacing: 0) {
                     ForEach(blocos) { b in
-                        LinhaBloco(bloco: b)
+                        LinhaBloco(bloco: b, feito: ids.contains(b.id), podeMarcar: !futuro) {
+                            checkin(b)
+                        }
                         if b.id != blocos.last?.id {
                             Divider().overlay(Color.borda).padding(.leading, 22)
                         }
@@ -203,6 +225,7 @@ struct HomeView: View {
     private var resumo: some View {
         let (f, t) = placar.progresso(em: dia)
         let registrados = placar.registros.filter { !$0.deslize && Calendar.current.isDate($0.data, inSameDayAs: dia) }.count
+            + feitos.filter { Calendar.current.isDate($0.inicio, inSameDayAs: dia) }.count
         return HStack(spacing: 16) {
             ZStack {
                 Anel(progresso: Double(placar.pontuacao) / 100, espessura: 9)
@@ -530,17 +553,31 @@ struct CartaoAgora: View {
 
 struct LinhaBloco: View {
     let bloco: Bloco
+    var feito = false
+    var podeMarcar = true
+    var marcar: () -> Void = {}
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { t in
             let agora = bloco.acontecendo(t.date)
             let passou = bloco.fim <= t.date
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.spring(duration: 0.3)) { marcar() }
+                } label: {
+                    Image(systemName: feito ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 24))
+                        .foregroundStyle(feito ? Color.verde : Color.white.opacity(podeMarcar ? 0.35 : 0.12))
+                        .frame(width: 32, height: 34)
+                }
+                .buttonStyle(.plain)
+                .disabled(!podeMarcar)
                 Capsule().fill(bloco.cor).frame(width: 4, height: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(bloco.titulo)
                         .font(.system(size: 15, weight: agora ? .bold : .semibold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .strikethrough(feito)
+                        .foregroundStyle(feito ? Color.texto2 : .white)
                         .lineLimit(1)
                     Text(bloco.horario)
                         .font(.system(size: 12, design: .rounded))
@@ -562,7 +599,7 @@ struct LinhaBloco: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 8)
-            .opacity(passou ? 0.45 : 1)
+            .opacity(passou && !feito ? 0.6 : 1)
         }
     }
 }

@@ -232,10 +232,29 @@ enum Nivel: Int, CaseIterable {
 /// XP por concluir uma tarefa
 let xpTarefa = 5
 
+/// Check-in de um bloco da agenda ("fiz a Operação de hoje")
+@Model
+final class BlocoFeito {
+    var blocoID: String = ""
+    var titulo: String = ""
+    var inicio: Date = Date.now
+    var feitoEm: Date = Date.now
+
+    init(blocoID: String, titulo: String, inicio: Date) {
+        self.blocoID = blocoID
+        self.titulo = titulo
+        self.inicio = inicio
+    }
+}
+
+/// XP por check-in de bloco da agenda
+let xpBloco = 5
+
 struct Placar {
     let habitos: [Habito]
     let registros: [Registro]
     let tarefas: [Tarefa]
+    var feitos: [BlocoFeito] = []
 
     func doDia(_ h: Habito, em dia: Date = .now) -> [Registro] {
         registros.filter { $0.habitoID == h.id && Calendar.current.isDate($0.data, inSameDayAs: dia) }
@@ -286,6 +305,7 @@ struct Placar {
     var xpTotal: Int {
         registros.reduce(0) { $0 + $1.xp }
             + tarefas.filter { $0.concluidaEm != nil }.count * xpTarefa
+            + feitos.count * xpBloco
     }
 
     /// Dias seguidos com pelo menos um registro ou tarefa feita
@@ -306,6 +326,7 @@ struct Placar {
         let cal = Calendar.current
         return registros.contains { !$0.deslize && cal.isDate($0.data, inSameDayAs: dia) }
             || tarefas.contains { t in t.concluidaEm.map { cal.isDate($0, inSameDayAs: dia) } ?? false }
+            || feitos.contains { cal.isDate($0.inicio, inSameDayAs: dia) }
     }
 }
 

@@ -21,6 +21,8 @@ struct PerfilView: View {
     @AppStorage("avisoBlocos") private var avisoBlocos = true
     @AppStorage("minutosAntesBloco") private var minutosAntes = 5
     @AppStorage("blocosComAlarme") private var blocosComAlarme = "Alinhamento, Fechamento"
+    @AppStorage("lembreteCheckin") private var lembreteCheckin = true
+    @AppStorage("horaCheckin") private var horaCheckin = "17:00"
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
 
@@ -234,6 +236,18 @@ struct PerfilView: View {
                         .padding(10)
                         .background(Color.cartao2, in: RoundedRectangle(cornerRadius: 10))
                         .onSubmit { Notificacoes.reagendar(ctx) }
+                    Toggle("Lembrete de check-in (seg a sex)", isOn: $lembreteCheckin)
+                        .tint(Color.verde)
+                        .onChange(of: lembreteCheckin) { _, _ in Notificacoes.reagendar(ctx) }
+                    if lembreteCheckin {
+                        Picker("Horário do lembrete", selection: $horaCheckin) {
+                            ForEach(["12:00", "16:30", "17:00", "17:30", "18:00", "19:00", "20:00", "21:00"], id: \.self) {
+                                Text($0).tag($0)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: horaCheckin) { _, _ in Notificacoes.reagendar(ctx) }
+                    }
                 } else {
                     Text(agenda.negada
                          ? "Acesso negado. Libere em Ajustes > Apps > LBO Rotina > Calendários > Acesso Total."
