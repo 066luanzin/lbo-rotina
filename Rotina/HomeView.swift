@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var dia = Date.now
     @State private var cronometro: Habito?
     @State private var agenda = Agenda.shared
+    @State private var verConcluidos = false
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas, feitos: feitos) }
     private var hoje: Bool { Calendar.current.isDateInToday(dia) }
@@ -28,8 +29,14 @@ struct HomeView: View {
                         if habitos.isEmpty { cartaoPrograma }
                         semana
                         resumo
-                        lista
-                        agendaDoDia
+                        // Hoje a agenda manda: vem antes das tarefas
+                        if hoje {
+                            agendaDoDia
+                            lista
+                        } else {
+                            lista
+                            agendaDoDia
+                        }
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 110)
@@ -120,12 +127,42 @@ struct HomeView: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color.texto2)
                 }
+                // Hoje: blocos já feitos e já passados ficam recolhidos
+                let agoraD = Date.now
+                let concluidos = hoje ? blocos.filter { ids.contains($0.id) && $0.fim <= agoraD } : []
+                let visiveis = verConcluidos ? blocos : blocos.filter { b in !concluidos.contains { $0.id == b.id } }
                 VStack(spacing: 0) {
-                    ForEach(blocos) { b in
+                    if !concluidos.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) { verConcluidos.toggle() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.verde)
+                                Text(concluidos.count == 1 ? "1 concluído" : "\(concluidos.count) concluídos")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Color.texto2)
+                                Spacer()
+                                Text(verConcluidos ? "ocultar" : "mostrar")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Color.verde)
+                                Image(systemName: verConcluidos ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(Color.verde)
+                            }
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if !visiveis.isEmpty {
+                            Divider().overlay(Color.borda).padding(.leading, 22)
+                        }
+                    }
+                    ForEach(visiveis) { b in
                         LinhaBloco(bloco: b, feito: ids.contains(b.id), podeMarcar: !futuro) {
                             checkin(b)
                         }
-                        if b.id != blocos.last?.id {
+                        if b.id != visiveis.last?.id {
                             Divider().overlay(Color.borda).padding(.leading, 22)
                         }
                     }

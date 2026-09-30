@@ -13,11 +13,46 @@ final class AppState {
     var aba = 0
 }
 
+/// Banco de dados único: usado pelas telas e pelos botões das notificações (mesmo com o app fechado)
+enum Banco {
+    static let container: ModelContainer = {
+        do {
+            return try ModelContainer(for: Tarefa.self, Habito.self, Registro.self, BlocoFeito.self)
+        } catch {
+            fatalError("Não consegui abrir o banco: \(error)")
+        }
+    }()
+}
+
 final class NotifDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotifDelegate()
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
+    }
+
+    /// Botões "✅ Feito" e "⏰ Adiar 15 min" do aviso de fim de bloco
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        let conteudo = response.notification.request.content
+        let info = conteudo.userInfo
+        let acao = response.actionIdentifier
+        guard let blocoID = info["blocoID"] as? String else { return }
+        let titulo = info["titulo"] as? String ?? conteudo.title
+        let inicio = Date(timeIntervalSince1970: info["inicio"] as? Double ?? Date.now.timeIntervalSince1970)
+        let tituloAviso = conteudo.title
+        let corpoAviso = conteudo.body
+        await MainActor.run {
+            switch acao {
+            case "feito":
+                Notificacoes.marcarBloco(blocoID: blocoID, titulo: titulo, inicio: inicio)
+            case "adiar":
+                Notificacoes.adiar(titulo: tituloAviso, corpo: corpoAviso,
+                                   blocoID: blocoID, tituloBloco: titulo, inicio: inicio)
+            default:
+                break
+            }
+        }
     }
 }
 
@@ -27,6 +62,7 @@ struct RotinaApp: App {
 
     init() {
         UNUserNotificationCenter.current().delegate = NotifDelegate.shared
+        Notificacoes.registrarCategorias()
     }
 
     var body: some Scene {
@@ -40,7 +76,7 @@ struct RotinaApp: App {
                     estado.captura = url.host == "programa" ? .dificuldade : .tarefa
                 }
         }
-        .modelContainer(for: [Tarefa.self, Habito.self, Registro.self, BlocoFeito.self])
+        .modelContainer(Banco.container)
     }
 }
 

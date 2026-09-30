@@ -22,6 +22,7 @@ struct PerfilView: View {
     @AppStorage("minutosAntesBloco") private var minutosAntes = 5
     @AppStorage("blocosComAlarme") private var blocosComAlarme = "Alinhamento, Fechamento"
     @AppStorage("lembreteCheckin") private var lembreteCheckin = true
+    @AppStorage("perguntarFimBloco") private var perguntarFimBloco = true
     @AppStorage("horasCheckin") private var horasCheckin = ""
 
     private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
@@ -250,6 +251,9 @@ struct PerfilView: View {
                         .pickerStyle(.menu)
                         .onChange(of: minutosAntes) { _, _ in Notificacoes.reagendar(ctx) }
                     }
+                    Toggle("Perguntar \"Fez?\" no fim de cada bloco", isOn: $perguntarFimBloco)
+                        .tint(Color.verde)
+                        .onChange(of: perguntarFimBloco) { _, _ in Notificacoes.reagendar(ctx) }
                     Text("Blocos que tocam alarme (parte do nome, separado por vírgula)")
                         .font(.system(size: 12, design: .rounded))
                         .foregroundStyle(Color.texto2)

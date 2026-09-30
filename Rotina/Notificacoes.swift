@@ -146,31 +146,89 @@ enum Notificacoes {
             }
         }
 
-        // "Em 5 min: Operação (piores)" antes de cada bloco, até completar o limite do iPhone
-        if Agenda.avisarAntes {
-            let antes = Agenda.minutosAntes
-            for b in blocos {
-                guard pedidos.count < 60 else { break }
+        // Blocos da agenda: "Em 5 min: Operação" antes e "Terminou: Operação. Fez?" no fim (com botões).
+        // O iPhone guarda no máximo 64 avisos, então entram os mais próximos primeiro.
+        var avisosBlocos: [(quando: Date, pedido: UNNotificationRequest)] = []
+        let jaFeitos = Set(((try? ctx.fetch(FetchDescriptor<BlocoFeito>())) ?? []).map(\.blocoID))
+        for b in blocos {
+            if Agenda.avisarAntes {
+                let antes = Agenda.minutosAntes
                 let quando = b.inicio.addingTimeInterval(TimeInterval(-antes * 60))
-                guard quando > agora else { continue }
-                let c = UNMutableNotificationContent()
-                c.title = antes == 0 ? "Agora: \(b.titulo)" : "Em \(antes) min: \(b.titulo)"
-                c.body = b.horario
-                c.sound = .default
-                pedidos.append(UNNotificationRequest(
-                    identifier: "bloco-\(UUID(texto: b.id).uuidString)", content: c,
-                    trigger: UNCalendarNotificationTrigger(
-                        dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false)))
+                if quando > agora {
+                    let c = UNMutableNotificationContent()
+                    c.title = antes == 0 ? "Agora: \(b.titulo)" : "Em \(antes) min: \(b.titulo)"
+                    c.body = b.horario
+                    c.sound = .default
+                    avisosBlocos.append((quando, UNNotificationRequest(
+                        identifier: "bloco-\(UUID(texto: b.id).uuidString)", content: c,
+                        trigger: UNCalendarNotificationTrigger(
+                            dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false))))
+                }
             }
+            if Agenda.perguntarNoFim, b.fim > agora, !jaFeitos.contains(b.id) {
+                let c = UNMutableNotificationContent()
+                c.title = "Terminou: \(b.titulo)"
+                c.body = "Fez? Segure a notificação pra marcar ✅ Feito."
+                c.sound = .default
+                c.categoryIdentifier = categoriaFimBloco
+                c.userInfo = ["blocoID": b.id, "titulo": b.titulo, "inicio": b.inicio.timeIntervalSince1970]
+                avisosBlocos.append((b.fim, UNNotificationRequest(
+                    identifier: "fim-\(UUID(texto: b.id).uuidString)", content: c,
+                    trigger: UNCalendarNotificationTrigger(
+                        dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: b.fim), repeats: false))))
+            }
+        }
+        for aviso in avisosBlocos.sorted(by: { $0.quando < $1.quando }) {
+            guard pedidos.count < 60 else { break }
+            pedidos.append(aviso.pedido)
         }
 
         // Apaga os antigos (menos o aviso do cronômetro) e só depois cria os novos
         let novos = Array(pedidos.prefix(60))
         center.getPendingNotificationRequests { pendentes in
-            let ids = pendentes.map(\.identifier).filter { $0 != "cronometro" }
+            // Mantém o cronômetro e os "adiar 15 min" que ainda vão tocar
+            let ids = pendentes.map(\.identifier).filter { $0 != "cronometro" && !$0.hasPrefix("adiado-") }
             center.removePendingNotificationRequests(withIdentifiers: ids)
             for p in novos { center.add(p) }
         }
+    }
+
+    // MARK: Botões da notificação de fim de bloco
+
+    static let categoriaFimBloco = "fim-bloco"
+
+    static func registrarCategorias() {
+        let feito = UNNotificationAction(identifier: "feito", title: "✅ Feito", options: [])
+        let adiar = UNNotificationAction(identifier: "adiar", title: "⏰ Adiar 15 min", options: [])
+        let categoria = UNNotificationCategory(identifier: categoriaFimBloco, actions: [feito, adiar],
+                                               intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([categoria])
+    }
+
+    /// "✅ Feito" na notificação: grava o check-in sem abrir o app
+    @MainActor
+    static func marcarBloco(blocoID: String, titulo: String, inicio: Date) {
+        let ctx = Banco.container.mainContext
+        let id = blocoID
+        let existentes = (try? ctx.fetch(FetchDescriptor<BlocoFeito>(predicate: #Predicate { $0.blocoID == id }))) ?? []
+        if existentes.isEmpty {
+            ctx.insert(BlocoFeito(blocoID: blocoID, titulo: titulo, inicio: inicio))
+            try? ctx.save()
+        }
+        reagendar(ctx)
+    }
+
+    /// "⏰ Adiar 15 min": pergunta de novo daqui a 15 minutos
+    static func adiar(titulo: String, corpo: String, blocoID: String, tituloBloco: String, inicio: Date) {
+        let c = UNMutableNotificationContent()
+        c.title = titulo
+        c.body = corpo
+        c.sound = .default
+        c.categoryIdentifier = categoriaFimBloco
+        c.userInfo = ["blocoID": blocoID, "titulo": tituloBloco, "inicio": inicio.timeIntervalSince1970]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: "adiado-\(UUID().uuidString)", content: c,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 15 * 60, repeats: false)))
     }
 
     /// Horários do lembrete de check-in, ex.: ["12:00", "17:00"]

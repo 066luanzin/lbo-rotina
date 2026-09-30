@@ -114,6 +114,8 @@ final class Agenda {
     // MARK: - Ajustes
 
     static var avisarAntes: Bool { UserDefaults.standard.object(forKey: "avisoBlocos") as? Bool ?? true }
+    /// Aviso no fim de cada bloco: "Terminou: Operação. Fez?" com ✅ Feito / ⏰ Adiar
+    static var perguntarNoFim: Bool { UserDefaults.standard.object(forKey: "perguntarFimBloco") as? Bool ?? true }
     static var minutosAntes: Int { UserDefaults.standard.object(forKey: "minutosAntesBloco") as? Int ?? 5 }
     /// Blocos que tocam alarme de verdade (partes do nome, separadas por vírgula)
     static var comAlarme: [String] {
