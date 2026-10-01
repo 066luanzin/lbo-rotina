@@ -17,6 +17,8 @@ struct PerfilView: View {
     @State private var dadosRestaurar: Data?
     @State private var confirmarRestaurar = false
     @State private var msgBackup: String?
+    @State private var escolhendoPasta = false
+    @State private var msgSync: String?
     @AppStorage("modeloIA") private var modelo = "claude-opus-5"
     @State private var chave = Chave.ler() ?? ""
     @State private var testando = false
@@ -45,6 +47,7 @@ struct PerfilView: View {
                     numeros
                     atalho
                     meta
+                    claudeCode
                     backup
                     ia
                     ajustes
@@ -247,6 +250,54 @@ struct PerfilView: View {
         .font(.system(size: 15, design: .rounded))
         .frame(maxWidth: .infinity, alignment: .leading)
         .cartao()
+    }
+
+    // MARK: Ligação com o Claude Code (pasta no iCloud Drive)
+
+    private var claudeCode: some View {
+        let _ = msgSync
+        return VStack(alignment: .leading, spacing: 10) {
+            Label("Ligação com o Claude Code", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.verde)
+            Text(Sincronizacao.configurada
+                 ? "Pasta: \(Sincronizacao.nomePasta)" + (Sincronizacao.ultima.map { " · última sincronização \($0.formatted(.dateTime.day().month().hour().minute()))" } ?? "")
+                 : "Escolha (ou crie) a pasta \"LBO Sync\" no iCloud Drive. O app grava seu dia nela e o Claude Code, no PC, lê e manda tarefas, notas e check-ins de volta.")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Color.texto2)
+            Button {
+                escolhendoPasta = true
+            } label: {
+                Label(Sincronizacao.configurada ? "Trocar pasta" : "Escolher pasta no iCloud Drive", systemImage: "folder.badge.gearshape")
+            }
+            .buttonStyle(Sincronizacao.configurada ? AnyButtonStyle(EstiloSecundario()) : AnyButtonStyle(EstiloPrincipal()))
+            if Sincronizacao.configurada {
+                Button {
+                    let n = Sincronizacao.sincronizar(ctx)
+                    Haptico.sucesso()
+                    msgSync = n > 0 ? "\(n) pedido(s) do Claude aplicados ✅" : "Sincronizado ✅"
+                } label: {
+                    Label("Sincronizar agora", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(EstiloPrincipal())
+            }
+            if let m = msgSync {
+                Text(m)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(m.hasPrefix("Não") ? Color.vermelho : Color.verde)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cartao()
+        .fileImporter(isPresented: $escolhendoPasta, allowedContentTypes: [.folder]) { resultado in
+            guard case .success(let url) = resultado else { return }
+            if Sincronizacao.salvarPasta(url) {
+                let n = Sincronizacao.sincronizar(ctx)
+                msgSync = "Pasta ligada ✅" + (n > 0 ? " \(n) pedido(s) do Claude aplicados." : "")
+            } else {
+                msgSync = "Não consegui acessar essa pasta. Tente de novo."
+            }
+        }
     }
 
     // MARK: Backup

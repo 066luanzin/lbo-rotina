@@ -33,6 +33,13 @@ struct EstiloPrincipal: ButtonStyle {
     }
 }
 
+/// Permite escolher o estilo do botão com um "if" (ex.: principal ou secundário)
+struct AnyButtonStyle: ButtonStyle {
+    private let corpo: (Configuration) -> AnyView
+    init<S: ButtonStyle>(_ estilo: S) { corpo = { AnyView(estilo.makeBody(configuration: $0)) } }
+    func makeBody(configuration: Configuration) -> some View { corpo(configuration) }
+}
+
 struct EstiloSecundario: ButtonStyle {
     var cor: Color = .white
     func makeBody(configuration: Configuration) -> some View {

@@ -112,9 +112,12 @@ struct RaizView: View {
             if nova == .background {
                 Notificacoes.reagendar(ctx)
                 Backup.automatico(ctx)
+                Sincronizacao.sincronizar(ctx)
             }
             if nova == .active {
                 Agenda.shared.recarregar()
+                // Pega os pedidos do Claude Code (iCloud) antes de refazer os avisos
+                Sincronizacao.sincronizar(ctx)
                 Notificacoes.reagendar(ctx)
             }
         }
