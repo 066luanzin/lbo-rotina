@@ -332,6 +332,26 @@ struct CapturaView: View {
 
         if modo == .nota {
             let n = InterpretadorLocal.nota(texto, clientes: clientes.filter(\.ativo).map(\.info))
+            // "Gás Express: checar o resultado dia 24" → próximo passo (tarefa do cliente com data)
+            let passo = n.texto.replacingOccurrences(of: #"^(?:pr[óo]ximo passo)\s*[:,\-]?\s*"#, with: "",
+                                                     options: [.regularExpression, .caseInsensitive])
+            let ehPasso = InterpretadorLocal.dobrar(n.texto)
+                .range(of: #"^(?:proximo passo|lembrar|lembra|checar|verificar|conferir|ligar|mandar|enviar|cobrar|revisar)"#,
+                       options: .regularExpression) != nil
+            if n.tipo == "nota", !n.cliente.isEmpty, ehPasso {
+                var r = InterpretadorLocal.interpretar(passo.prefix(1).uppercased() + passo.dropFirst(), modo: .tarefa)
+                if let t = r.tarefas.first, !t.data.isEmpty {
+                    r.resumo = "Próximo passo de \(n.cliente) anotado. \(r.resumo)"
+                    let salvo = Aplicador.salvar(r, ctx: ctx)
+                    salvo.tarefas.forEach { $0.cliente = n.cliente }
+                    try? ctx.save()
+                    resultado = r
+                    criadas = salvo.tarefas
+                    Haptico.sucesso()
+                    withAnimation(.spring) { etapa = .pronto }
+                    return
+                }
+            }
             let nova = Nota(texto: n.texto, cliente: n.cliente, tipo: n.tipo)
             ctx.insert(nova)
             try? ctx.save()

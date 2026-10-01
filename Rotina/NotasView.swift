@@ -42,6 +42,17 @@ struct NotasView: View {
                         HStack(spacing: 10) {
                             atalho("Fechamento do dia", "doc.text.fill") { fechamento = true }
                             atalho("Relatório da semana", "chart.bar.fill") { relatorio = true }
+                            NavigationLink { ClientesView() } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Image(systemName: "person.2.fill").font(.system(size: 20)).foregroundStyle(Color.verde)
+                                    Text("Clientes")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                                .cartao(14)
+                            }
+                            .buttonStyle(.plain)
                         }
                         ScrollView(.horizontal) {
                             HStack(spacing: 8) {
@@ -188,7 +199,7 @@ struct ClientesView: View {
             Section {
                 ForEach(clientes) { c in
                     NavigationLink {
-                        ClienteEditView(cliente: c)
+                        ClienteDetalheView(cliente: c)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {

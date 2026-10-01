@@ -109,7 +109,10 @@ struct RaizView: View {
             Notificacoes.reagendar(ctx)
         }
         .onChange(of: fase) { _, nova in
-            if nova == .background { Notificacoes.reagendar(ctx) }
+            if nova == .background {
+                Notificacoes.reagendar(ctx)
+                Backup.automatico(ctx)
+            }
             if nova == .active {
                 Agenda.shared.recarregar()
                 Notificacoes.reagendar(ctx)

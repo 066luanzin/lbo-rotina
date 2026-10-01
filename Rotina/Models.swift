@@ -58,6 +58,8 @@ final class Tarefa {
     var diasRaw: String = ""
     var concluidaEm: Date?
     var criadaEm: Date = Date.now
+    /// Próximo passo de um cliente ("" = tarefa comum)
+    var cliente: String = ""
 
     init(titulo: String, quando: Date?, temHora: Bool, repeticao: Repeticao = .nunca) {
         self.titulo = titulo

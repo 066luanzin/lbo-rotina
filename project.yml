@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.4"
+    MARKETING_VERSION: "1.5"
     CURRENT_PROJECT_VERSION: "2"
 targets:
   Rotina:
@@ -26,6 +26,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: O LBO Rotina usa o microfone pra você falar suas tarefas e hábitos.
         NSSpeechRecognitionUsageDescription: O LBO Rotina transforma o que você fala em texto pra criar tarefas e hábitos.

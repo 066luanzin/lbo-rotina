@@ -211,7 +211,8 @@ struct HomeView: View {
     // MARK: Cabeçalho "E aí, Luan!"
 
     private var cabecalho: some View {
-        let nivel = Nivel.de(placar.xpTotal)
+        let xp = placar.xpTotal + MetaSemanal.historico(feitos: Set(feitos.map(\.blocoID))).batidas * MetaSemanal.xpBonus
+        let nivel = Nivel.de(xp)
         return HStack(spacing: 12) {
             Text(String(nome.prefix(1)).uppercased())
                 .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -226,7 +227,7 @@ struct HomeView: View {
             Spacer()
             HStack(spacing: 5) {
                 Image(systemName: "shield.lefthalf.filled")
-                Text("\(nivel.nome) · \(placar.xpTotal) XP")
+                Text("\(nivel.nome) · \(xp) XP")
             }
             .font(.system(size: 12, weight: .bold, design: .rounded))
             .foregroundStyle(nivel.cor)
@@ -299,6 +300,9 @@ struct HomeView: View {
         let (f, t) = placar.progresso(em: dia)
         let registrados = placar.registros.filter { !$0.deslize && Calendar.current.isDate($0.data, inSameDayAs: dia) }.count
             + feitos.filter { Calendar.current.isDate($0.inicio, inSameDayAs: dia) }.count
+        let ids = Set(feitos.map(\.blocoID))
+        let semana = MetaSemanal.semanaAtual(feitos: ids)
+        let sequenciaSemanas = MetaSemanal.historico(feitos: ids).sequencia
         return HStack(spacing: 16) {
             ZStack {
                 Anel(progresso: Double(placar.pontuacao) / 100, espessura: 9)
@@ -317,6 +321,20 @@ struct HomeView: View {
                 ProgressView(value: t == 0 ? 0 : Double(f) / Double(t))
                     .tint(Color.verde)
                     .padding(.top, 4)
+                if semana.total > 0 {
+                    let pct = Int((Double(semana.feitos) / Double(semana.total) * 100).rounded())
+                    HStack(spacing: 6) {
+                        Image(systemName: pct >= MetaSemanal.meta ? "flame.fill" : "target")
+                            .foregroundStyle(pct >= MetaSemanal.meta ? Color.orange : Color.texto2)
+                        Text("Semana: \(pct)% de \(MetaSemanal.meta)%")
+                        if sequenciaSemanas > 0 {
+                            Text("· 🔥 \(sequenciaSemanas) \(sequenciaSemanas == 1 ? "semana" : "semanas")")
+                        }
+                    }
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.texto2)
+                    .padding(.top, 2)
+                }
             }
         }
         .cartao(16)
@@ -548,7 +566,12 @@ struct LinhaTarefa: View {
                         Image(systemName: "repeat").font(.system(size: 10))
                         Text(tarefa.repeticaoTexto)
                     }
-                    if tarefa.horaTexto == nil && tarefa.repeticao == .nunca { Text("Tarefa · \(xpTarefa) XP") }
+                    if !tarefa.cliente.isEmpty {
+                        Text(tarefa.cliente).foregroundStyle(Color.verde)
+                    }
+                    if tarefa.horaTexto == nil && tarefa.repeticao == .nunca && tarefa.cliente.isEmpty {
+                        Text("Tarefa · \(xpTarefa) XP")
+                    }
                 }
                 .font(.system(size: 12, design: .rounded))
                 .foregroundStyle(Color.texto2)

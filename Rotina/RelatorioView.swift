@@ -120,6 +120,15 @@ struct RelatorioView: View {
                         numero("\(r.xp)", "XP")
                     }
 
+                    if r.blocosTotal > 0 {
+                        let ok = MetaSemanal.bateu(feitos: r.blocosFeitos, total: r.blocosTotal)
+                        Label(ok ? "Meta de \(MetaSemanal.meta)% batida (+\(MetaSemanal.xpBonus) XP)"
+                                 : "Meta: \(MetaSemanal.meta)% dos blocos com check-in",
+                              systemImage: ok ? "flame.fill" : "target")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(ok ? Color.orange : Color.texto2)
+                    }
+
                     if !r.tipos.isEmpty {
                         Text("Por tipo de bloco").titulo(18)
                         VStack(spacing: 12) {

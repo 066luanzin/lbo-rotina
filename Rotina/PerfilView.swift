@@ -1,13 +1,22 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import UniformTypeIdentifiers
 
 struct PerfilView: View {
     @Environment(\.modelContext) private var ctx
     @Query private var habitos: [Habito]
     @Query private var registros: [Registro]
     @Query private var tarefas: [Tarefa]
+    @Query private var feitos: [BlocoFeito]
     @AppStorage("nome") private var nome = ""
+    @AppStorage("metaSemanal") private var metaSemanal = 80
+    @State private var exportando = false
+    @State private var importando = false
+    @State private var arquivoBackup: ArquivoBackup?
+    @State private var dadosRestaurar: Data?
+    @State private var confirmarRestaurar = false
+    @State private var msgBackup: String?
     @AppStorage("modeloIA") private var modelo = "claude-opus-5"
     @State private var chave = Chave.ler() ?? ""
     @State private var testando = false
@@ -26,7 +35,7 @@ struct PerfilView: View {
     @AppStorage("alarmeBlocos") private var alarmeBlocos = true
     @AppStorage("horasCheckin") private var horasCheckin = ""
 
-    private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas) }
+    private var placar: Placar { Placar(habitos: habitos, registros: registros, tarefas: tarefas, feitos: feitos) }
 
     var body: some View {
         NavigationStack {
@@ -35,6 +44,8 @@ struct PerfilView: View {
                     nivel
                     numeros
                     atalho
+                    meta
+                    backup
                     ia
                     ajustes
                 }
@@ -82,7 +93,7 @@ struct PerfilView: View {
     }
 
     private var nivel: some View {
-        let xp = placar.xpTotal
+        let xp = placar.xpTotal + MetaSemanal.historico(feitos: Set(feitos.map(\.blocoID))).batidas * MetaSemanal.xpBonus
         let n = Nivel.de(xp)
         let prox = n.proximo
         let progresso = prox.map { Double(xp - n.xpMinimo) / Double($0.xpMinimo - n.xpMinimo) } ?? 1
@@ -208,6 +219,94 @@ struct PerfilView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cartao()
+    }
+
+    // MARK: Meta da semana
+
+    private var meta: some View {
+        let ids = Set(feitos.map(\.blocoID))
+        let semana = MetaSemanal.semanaAtual(feitos: ids)
+        let hist = MetaSemanal.historico(feitos: ids)
+        let pct = semana.total == 0 ? 0 : Int((Double(semana.feitos) / Double(semana.total) * 100).rounded())
+        return VStack(alignment: .leading, spacing: 10) {
+            Label("Meta da semana", systemImage: "target")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.verde)
+            Picker("Blocos com check-in", selection: $metaSemanal) {
+                ForEach([50, 60, 70, 80, 90, 100], id: \.self) { Text("\($0)%").tag($0) }
+            }
+            .pickerStyle(.menu)
+            ProgressView(value: min(1, Double(pct) / Double(max(1, metaSemanal)))).tint(pct >= metaSemanal ? Color.verde : Color.orange)
+            Text("Esta semana: \(pct)% (\(semana.feitos) de \(semana.total) blocos)")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Color.texto2)
+            Text("🔥 \(hist.sequencia) semanas seguidas · \(hist.batidas) metas batidas · +\(MetaSemanal.xpBonus) XP por semana batida")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Color.texto2)
+        }
+        .font(.system(size: 15, design: .rounded))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cartao()
+    }
+
+    // MARK: Backup
+
+    private var backup: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Backup", systemImage: "externaldrive.fill.badge.checkmark")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+            Text(Backup.ultimo.map { "Backup automático: \($0.formatted(.dateTime.day().month().hour().minute())) (Arquivos > No meu iPhone > LBO Rotina)" }
+                 ?? "O backup automático é feito uma vez por dia, quando você sai do app.")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(Color.texto2)
+            Button {
+                if let d = Backup.gerar(ctx) {
+                    arquivoBackup = ArquivoBackup(dados: d)
+                    exportando = true
+                }
+            } label: {
+                Label("Salvar backup no iCloud Drive", systemImage: "icloud.and.arrow.up")
+            }
+            .buttonStyle(EstiloPrincipal())
+            Button {
+                importando = true
+            } label: {
+                Label("Restaurar de um backup", systemImage: "arrow.counterclockwise")
+            }
+            .buttonStyle(EstiloSecundario())
+            if let m = msgBackup {
+                Text(m)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(m.hasPrefix("Não") || m.hasPrefix("Arquivo") ? Color.vermelho : Color.verde)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cartao()
+        .fileExporter(isPresented: $exportando, document: arquivoBackup, contentType: .json,
+                      defaultFilename: Backup.nomeArquivo()) { resultado in
+            switch resultado {
+            case .success: msgBackup = "Backup salvo ✅"
+            case .failure: msgBackup = "Não consegui salvar o backup."
+            }
+        }
+        .fileImporter(isPresented: $importando, allowedContentTypes: [.json]) { resultado in
+            guard case .success(let url) = resultado else { return }
+            let acesso = url.startAccessingSecurityScopedResource()
+            defer { if acesso { url.stopAccessingSecurityScopedResource() } }
+            dadosRestaurar = try? Data(contentsOf: url)
+            confirmarRestaurar = dadosRestaurar != nil
+        }
+        .confirmationDialog("Restaurar este backup? Tudo que está no app agora será trocado pelo conteúdo do arquivo.",
+                            isPresented: $confirmarRestaurar, titleVisibility: .visible) {
+            Button("Restaurar", role: .destructive) {
+                guard let d = dadosRestaurar else { return }
+                if let resumo = try? Backup.restaurar(d, ctx: ctx) {
+                    msgBackup = "Restaurado: \(resumo) ✅"
+                } else {
+                    msgBackup = "Arquivo inválido: não é um backup do LBO Rotina."
+                }
+            }
+        }
     }
 
     private var ajustes: some View {
