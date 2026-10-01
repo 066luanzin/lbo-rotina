@@ -101,7 +101,7 @@ struct EditarTarefaView: View {
     @State private var quando = Date.now
     @State private var repeticao = Repeticao.nunca
     @State private var dias: Set<Int> = [2, 3, 4, 5, 6]
-    @State private var tocarAlarme = true
+    @State private var tocarAlarme = false
 
     var body: some View {
         NavigationStack {

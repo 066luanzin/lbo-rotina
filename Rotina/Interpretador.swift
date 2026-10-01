@@ -129,12 +129,23 @@ enum InterpretadorLocal {
         let pedeLembrete = dobrar(s).range(of: #"lembr|avis|alarm|desperta|notific"#, options: .regularExpression) != nil
         let L = Leitor(s)
 
-        // "…às 16h sem alarme" / "só notificação" / "com alarme"
+        // Padrão do app: só notificação. Alarme (barulho) só quando pedir:
+        // "cria um alarme…", "coloca o alarme com barulho", "me acorda…", "despertador"
         var alarme: Bool?
-        if L.tirar(#"\b(?:sem\s+(?:o\s+)?(?:alarme|despertador|despertar|tocar)|s[óo]\s+(?:a\s+|com\s+)?notifica[çc][ãa]o|s[óo]\s+(?:o\s+)?lembrete|no\s+silencioso)\b"#) != nil {
+        if L.tirar(#"\b(?:sem\s+(?:o\s+)?(?:alarme|despertador|despertar|tocar|barulho)|s[óo]\s+(?:a\s+|com\s+)?notifica[çc][ãa]o|s[óo]\s+(?:o\s+)?(?:lembrete|aviso)|no\s+silencioso)\b"#) != nil {
             alarme = false
-        } else if L.tirar(#"\b(?:com\s+(?:o\s+)?(?:alarme|despertador)|tocando\s+(?:o\s+)?alarme|(?:e\s+)?toca(?:r)?\s+(?:o\s+)?alarme)\b"#) != nil {
-            alarme = true
+        } else {
+            let pedidosAlarme = [
+                #"\b(?:cria|crie|criar|faz|fa[çc]a|marca|marque|programa|programe|coloca|coloque|bota|bote|p[õo]e|ponha|liga|ligue)\s+(?:(?:pra|para)\s+mim\s+)?(?:o\s+|um\s+)?(?:alarme|despertador)(?:\s+(?:pra|para)\s+mim)?(?:\s+com\s+barulho)?\b"#,
+                #"\b(?:com|e)\s+(?:o\s+)?(?:alarme|despertador|barulho)(?:\s+com\s+barulho)?\b"#,
+                #"\b(?:tocando|toca(?:r)?)\s+(?:o\s+)?alarme\b"#,
+                #"\bme\s+acord[ae]\b"#,
+                // "alarme" solto, mas não "testar o alarme"
+                #"\b(?<![oa]\s)(?:um\s+)?(?:alarme|despertador)\b"#,
+            ]
+            for p in pedidosAlarme {
+                while L.tirar(p) != nil { alarme = true }
+            }
         }
 
         var quandoExato: Date?
@@ -392,7 +403,7 @@ enum InterpretadorLocal {
         while let p = palavras.last, soltas.contains(dobrar(p)) { palavras.removeLast() }
         while let p = palavras.first, soltas.contains(dobrar(p)) { palavras.removeFirst() }
         var titulo = palavras.joined(separator: " ")
-        if titulo.isEmpty { titulo = fala.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if titulo.isEmpty { titulo = alarme == true ? "Alarme" : fala.trimmingCharacters(in: .whitespacesAndNewlines) }
         titulo = titulo.prefix(1).uppercased() + titulo.dropFirst()
 
         // Saída

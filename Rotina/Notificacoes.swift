@@ -278,7 +278,8 @@ enum Aplicador {
             let nova = Tarefa(titulo: t.titulo, quando: quando, temHora: temHora,
                               repeticao: ehDias ? .dias : (Repeticao(rawValue: t.repeticao) ?? .nunca))
             if ehDias { nova.diasRaw = String(t.repeticao.dropFirst(5)) }
-            if let a = t.alarme { nova.tocarAlarme = a }
+            // Só notificação, a não ser que tenha pedido alarme
+            nova.tocarAlarme = t.alarme ?? false
             ctx.insert(nova)
             novasTarefas.append(nova)
         }

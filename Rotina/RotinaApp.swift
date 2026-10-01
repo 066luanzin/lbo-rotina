@@ -106,6 +106,7 @@ struct RaizView: View {
             }
             if !nome.isEmpty && Alarmes.ligado { await Alarmes.pedirPermissao() }
             Seeds.clientes(ctx)
+            Seeds.migrarAlarmes(ctx)
             Notificacoes.reagendar(ctx)
         }
         .onChange(of: fase) { _, nova in

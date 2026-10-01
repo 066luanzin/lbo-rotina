@@ -110,6 +110,19 @@ enum Checklist {
 }
 
 enum Seeds {
+    /// 01/10/2026: o padrão passou a ser só notificação. Mantém alarme só no "Enviar Plano pro Claude".
+    @MainActor
+    static func migrarAlarmes(_ ctx: ModelContext) {
+        let chave = "migracaoAlarmePadrao1"
+        guard !UserDefaults.standard.bool(forKey: chave) else { return }
+        for t in (try? ctx.fetch(FetchDescriptor<Tarefa>())) ?? [] {
+            let titulo = InterpretadorLocal.dobrar(t.titulo)
+            t.tocarAlarme = titulo.contains("plano") && titulo.contains("claude")
+        }
+        try? ctx.save()
+        UserDefaults.standard.set(true, forKey: chave)
+    }
+
     /// Na primeira vez, cadastra os clientes da agência
     @MainActor
     static func clientes(_ ctx: ModelContext) {

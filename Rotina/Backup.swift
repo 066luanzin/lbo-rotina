@@ -102,7 +102,7 @@ enum Backup {
             let n = Tarefa(titulo: t.titulo, quando: t.quando, temHora: t.temHora)
             n.id = t.id; n.repeticaoRaw = t.repeticaoRaw; n.diasRaw = t.diasRaw
             n.concluidaEm = t.concluidaEm; n.criadaEm = t.criadaEm; n.cliente = t.cliente
-            n.tocarAlarme = t.tocarAlarme ?? true
+            n.tocarAlarme = t.tocarAlarme ?? false
             ctx.insert(n)
         }
         for h in b.habitos {

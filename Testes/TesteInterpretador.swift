@@ -103,6 +103,12 @@ checarAlarme("me lembra de sair pra tomar água às 16h sem alarme", titulo: "Sa
 checarAlarme("tomar água às 4 só notificação", titulo: "Tomar água", hora: "16:00", alarme: false)
 checarAlarme("reunião com o cliente às 15h com alarme", titulo: "Reunião com o cliente", hora: "15:00", alarme: true)
 checarAlarme("pagar o boleto às 11", titulo: "Pagar o boleto", hora: "11:00", alarme: nil)
+// 01/10: "cria um alarme pra mim hoje às 4 horas… coloca o alarme com barulho"
+checarAlarme("cria um alarme pra mim hoje às 4 horas eu tenho que ir no mercado coloca o alarme com barulho",
+             titulo: "Ir no mercado", hora: "16:00", alarme: true)
+checarAlarme("me acorda amanhã às 6", titulo: "Alarme", hora: "06:00", alarme: true)
+checarAlarme("beber água às 14h sem barulho", titulo: "Beber água", hora: "14:00", alarme: false)
+checarAlarme("despertador às 15h buscar o carro", titulo: "Buscar o carro", hora: "15:00", alarme: true)
 
 // Notas por cliente
 func checarNota(_ fala: String, cliente: String, texto: String, tipo: String = "nota") {
