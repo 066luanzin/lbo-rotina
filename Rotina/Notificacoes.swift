@@ -28,65 +28,70 @@ enum Notificacoes {
         var pedidos: [UNNotificationRequest] = []
 
         let tarefas = (try? ctx.fetch(FetchDescriptor<Tarefa>())) ?? []
-        for t in tarefas where t.temHora {
-            guard let q = t.quando else { continue }
-            let c = UNMutableNotificationContent()
-            c.title = t.titulo
-            c.body = "Lembrete do LBO Rotina"
-            c.sound = .default
-            c.userInfo = ["tarefa": t.id.uuidString]
-            var gatilhos: [UNCalendarNotificationTrigger] = []
-            switch t.repeticao {
-            case .nunca:
-                guard q > .now, t.concluidaEm == nil else { continue }
-                gatilhos = [UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: q), repeats: false)]
-            case .diario:
-                gatilhos = [UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.hour, .minute], from: q), repeats: true)]
-            case .semanal:
-                gatilhos = [UNCalendarNotificationTrigger(
-                    dateMatching: cal.dateComponents([.weekday, .hour, .minute], from: q), repeats: true)]
-            case .dias:
-                // Um aviso repetido pra cada dia escolhido (ex.: segunda a sexta)
-                var comps = cal.dateComponents([.hour, .minute], from: q)
-                for dia in t.dias {
-                    comps.weekday = dia
-                    gatilhos.append(UNCalendarNotificationTrigger(dateMatching: comps, repeats: true))
-                }
-            }
-            for (i, gatilho) in gatilhos.enumerated() {
-                let id = i == 0 ? "tarefa-\(t.id.uuidString)" : "tarefa-\(t.id.uuidString)-d\(i)"
-                pedidos.append(UNNotificationRequest(identifier: id, content: c, trigger: gatilho))
-            }
+        let agora = Date.now
+        let hoje = cal.startOfDay(for: agora)
+        var alarmes: [Alarmes.Pedido] = []
+        let idDia = DateFormatter()
+        idDia.locale = Locale(identifier: "en_US_POSIX")
+        idDia.dateFormat = "yyyyMMdd"
 
-            // Insiste mais 2 vezes (+3 e +10 min) enquanto a tarefa não for marcada como feita
-            if t.repeticao == .nunca {
-                for (i, atraso) in [3, 10].enumerated() {
-                    guard let depois = cal.date(byAdding: .minute, value: atraso, to: q) else { continue }
-                    let n = UNMutableNotificationContent()
-                    n.title = "⏰ \(t.titulo)"
-                    n.body = "Ainda não marcou como feita. Toque pra abrir."
-                    n.sound = .default
-                    n.userInfo = ["tarefa": t.id.uuidString]
-                    pedidos.append(UNNotificationRequest(
-                        identifier: "tarefa-\(t.id.uuidString)-\(i)", content: n,
-                        trigger: UNCalendarNotificationTrigger(
-                            dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: depois), repeats: false)))
+        /// Próximas vezes que a tarefa toca. Repetidas: um aviso por dia (próximos 5 dias), pulando o dia
+        /// em que ela já foi marcada como feita, então check-in antes da hora cancela o aviso e o alarme daquele dia.
+        func ocorrencias(_ t: Tarefa) -> [Date] {
+            guard t.temHora, let q = t.quando else { return [] }
+            if t.repeticao == .nunca { return q > agora && t.concluidaEm == nil ? [q] : [] }
+            let h = cal.component(.hour, from: q)
+            let mi = cal.component(.minute, from: q)
+            return (0..<5).compactMap { n -> Date? in
+                guard let d = cal.date(byAdding: .day, value: n, to: hoje),
+                      t.aparece(em: d), !t.feita(em: d),
+                      let quando = cal.date(bySettingHour: h, minute: mi, second: 0, of: d),
+                      quando > agora else { return nil }
+                return quando
+            }
+        }
+
+        for t in tarefas {
+            for quando in ocorrencias(t) {
+                let sufixo = t.repeticao == .nunca ? "" : "-\(idDia.string(from: quando))"
+                let c = UNMutableNotificationContent()
+                c.title = t.titulo
+                c.body = t.cliente.isEmpty ? "Lembrete do LBO Rotina" : t.cliente
+                c.sound = .default
+                c.userInfo = ["tarefa": t.id.uuidString]
+                pedidos.append(UNNotificationRequest(
+                    identifier: "tarefa-\(t.id.uuidString)\(sufixo)", content: c,
+                    trigger: UNCalendarNotificationTrigger(
+                        dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: quando), repeats: false)))
+
+                // Insiste mais 2 vezes (+3 e +10 min) enquanto não for marcada (repetidas: só a de hoje)
+                if t.repeticao == .nunca || cal.isDate(quando, inSameDayAs: agora) {
+                    for (i, atraso) in [3, 10].enumerated() {
+                        guard let depois = cal.date(byAdding: .minute, value: atraso, to: quando) else { continue }
+                        let n = UNMutableNotificationContent()
+                        n.title = "⏰ \(t.titulo)"
+                        n.body = "Ainda não marcou como feita. Toque pra abrir."
+                        n.sound = .default
+                        n.userInfo = ["tarefa": t.id.uuidString]
+                        pedidos.append(UNNotificationRequest(
+                            identifier: "tarefa-\(t.id.uuidString)\(sufixo)-\(i)", content: n,
+                            trigger: UNCalendarNotificationTrigger(
+                                dateMatching: cal.dateComponents([.year, .month, .day, .hour, .minute], from: depois), repeats: false)))
+                    }
+                }
+
+                // Alarme de verdade (iOS 26), se a tarefa estiver com alarme ligado
+                if t.tocarAlarme {
+                    alarmes.append(Alarmes.Pedido(id: t.repeticao == .nunca ? t.id : UUID(texto: "\(t.id.uuidString)\(sufixo)"),
+                                                  titulo: t.titulo, quando: quando, repeticao: .nunca))
                 }
             }
         }
 
         // Blocos da agenda (Google Agenda) dos próximos 7 dias
-        let agora = Date.now
         let blocos = Agenda.shared.blocos(de: agora, ate: cal.date(byAdding: .day, value: 7, to: agora) ?? agora)
 
-        // Alarme de verdade (iOS 26) pras tarefas com horário ainda não feitas
-        // e pros blocos marcados como importantes (ex.: Alinhamento SOF, Fechamento do dia)
-        var alarmes: [Alarmes.Pedido] = tarefas.compactMap { t in
-            guard t.temHora, let q = t.quando, !(t.repeticao == .nunca && t.concluidaEm != nil) else { return nil }
-            return Alarmes.Pedido(id: t.id, titulo: t.titulo, quando: q, repeticao: t.repeticao, dias: t.dias)
-        }
+        // Alarme também nos blocos marcados como importantes (ex.: Alinhamento SOF, Fechamento do dia)
         alarmes += blocos.filter(Agenda.tocaAlarme).prefix(14).map {
             Alarmes.Pedido(id: UUID(texto: $0.id), titulo: $0.titulo, quando: $0.inicio, repeticao: .nunca)
         }
@@ -273,6 +278,7 @@ enum Aplicador {
             let nova = Tarefa(titulo: t.titulo, quando: quando, temHora: temHora,
                               repeticao: ehDias ? .dias : (Repeticao(rawValue: t.repeticao) ?? .nunca))
             if ehDias { nova.diasRaw = String(t.repeticao.dropFirst(5)) }
+            if let a = t.alarme { nova.tocarAlarme = a }
             ctx.insert(nova)
             novasTarefas.append(nova)
         }

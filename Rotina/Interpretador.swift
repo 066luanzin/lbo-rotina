@@ -9,6 +9,8 @@ struct Interpretacao: Codable {
         var data: String       // "AAAA-MM-DD" ou ""
         var hora: String       // "HH:mm" ou ""
         var repeticao: String  // nunca | diario | semanal
+        /// false = só notificação; true = toca alarme; nil = padrão (toca)
+        var alarme: Bool?
     }
     struct HabitoIA: Codable {
         var titulo: String
@@ -126,6 +128,14 @@ enum InterpretadorLocal {
         s = s.replacingOccurrences(of: #"[,;!?]|(?<!\d)\.|\.(?!\d)"#, with: " ", options: .regularExpression)
         let pedeLembrete = dobrar(s).range(of: #"lembr|avis|alarm|desperta|notific"#, options: .regularExpression) != nil
         let L = Leitor(s)
+
+        // "…às 16h sem alarme" / "só notificação" / "com alarme"
+        var alarme: Bool?
+        if L.tirar(#"\b(?:sem\s+(?:o\s+)?(?:alarme|despertador|despertar|tocar)|s[óo]\s+(?:a\s+|com\s+)?notifica[çc][ãa]o|s[óo]\s+(?:o\s+)?lembrete|no\s+silencioso)\b"#) != nil {
+            alarme = false
+        } else if L.tirar(#"\b(?:com\s+(?:o\s+)?(?:alarme|despertador)|tocando\s+(?:o\s+)?alarme|(?:e\s+)?toca(?:r)?\s+(?:o\s+)?alarme)\b"#) != nil {
+            alarme = true
+        }
 
         var quandoExato: Date?
         var data: Date?
@@ -438,7 +448,8 @@ enum InterpretadorLocal {
         return Interpretacao(resumo: resumo, programa: "",
                              tarefas: [.init(titulo: titulo, data: dataTexto, hora: horaTexto,
                                              repeticao: diasRep.isEmpty ? repeticao
-                                                 : "dias:" + diasRep.sorted().map(String.init).joined(separator: ","))],
+                                                 : "dias:" + diasRep.sorted().map(String.init).joined(separator: ","),
+                                             alarme: alarme)],
                              habitos: [])
     }
 }

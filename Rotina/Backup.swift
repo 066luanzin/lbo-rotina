@@ -8,6 +8,7 @@ struct BackupDados: Codable {
     struct TarefaB: Codable {
         var id: UUID; var titulo: String; var quando: Date?; var temHora: Bool; var repeticaoRaw: String
         var diasRaw: String; var concluidaEm: Date?; var criadaEm: Date; var cliente: String
+        var tocarAlarme: Bool?
     }
     struct HabitoB: Codable {
         var id: UUID; var titulo: String; var descricao: String; var tipoRaw: String; var meta: Int; var minutos: Int
@@ -45,7 +46,8 @@ enum Backup {
         var b = BackupDados()
         b.tarefas = ((try? ctx.fetch(FetchDescriptor<Tarefa>())) ?? []).map {
             .init(id: $0.id, titulo: $0.titulo, quando: $0.quando, temHora: $0.temHora, repeticaoRaw: $0.repeticaoRaw,
-                  diasRaw: $0.diasRaw, concluidaEm: $0.concluidaEm, criadaEm: $0.criadaEm, cliente: $0.cliente)
+                  diasRaw: $0.diasRaw, concluidaEm: $0.concluidaEm, criadaEm: $0.criadaEm, cliente: $0.cliente,
+                  tocarAlarme: $0.tocarAlarme)
         }
         b.habitos = ((try? ctx.fetch(FetchDescriptor<Habito>())) ?? []).map {
             .init(id: $0.id, titulo: $0.titulo, descricao: $0.descricao, tipoRaw: $0.tipoRaw, meta: $0.meta, minutos: $0.minutos,
@@ -100,6 +102,7 @@ enum Backup {
             let n = Tarefa(titulo: t.titulo, quando: t.quando, temHora: t.temHora)
             n.id = t.id; n.repeticaoRaw = t.repeticaoRaw; n.diasRaw = t.diasRaw
             n.concluidaEm = t.concluidaEm; n.criadaEm = t.criadaEm; n.cliente = t.cliente
+            n.tocarAlarme = t.tocarAlarme ?? true
             ctx.insert(n)
         }
         for h in b.habitos {

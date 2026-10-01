@@ -88,6 +88,22 @@ checar("toda sexta às 18h pagar o Pedro", titulo: "Pagar o Pedro", data: "2026-
 checar("comprar pão", titulo: "Comprar pão", data: "", hora: "")
 checar("hoje à noite estudar inglês", titulo: "Estudar inglês", data: "2026-09-28", hora: "20:00")
 
+// Alarme por tarefa
+func checarAlarme(_ fala: String, titulo: String, hora: String, alarme: Bool?) {
+    let r = InterpretadorLocal.interpretar(fala, modo: .tarefa, agora: momento("2026-10-01 10:00"))
+    guard let t = r.tarefas.first else { print("FALHOU (sem tarefa):", fala); falhas += 1; return }
+    let ok = t.titulo == titulo && t.hora == hora && t.alarme == alarme
+    print(ok ? "ok     " : "FALHOU ", "alarme \"\(fala)\" -> \"\(t.titulo)\" \(t.hora) alarme=\(String(describing: t.alarme))")
+    if !ok {
+        print("        esperado: \"\(titulo)\" \(hora) alarme=\(String(describing: alarme))")
+        falhas += 1
+    }
+}
+checarAlarme("me lembra de sair pra tomar água às 16h sem alarme", titulo: "Sair pra tomar água", hora: "16:00", alarme: false)
+checarAlarme("tomar água às 4 só notificação", titulo: "Tomar água", hora: "16:00", alarme: false)
+checarAlarme("reunião com o cliente às 15h com alarme", titulo: "Reunião com o cliente", hora: "15:00", alarme: true)
+checarAlarme("pagar o boleto às 11", titulo: "Pagar o boleto", hora: "11:00", alarme: nil)
+
 // Notas por cliente
 func checarNota(_ fala: String, cliente: String, texto: String, tipo: String = "nota") {
     let n = InterpretadorLocal.nota(fala, clientes: InterpretadorLocal.clientesPadrao)

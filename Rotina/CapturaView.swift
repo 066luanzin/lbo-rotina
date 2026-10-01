@@ -6,6 +6,8 @@ struct CapturaView: View {
     @State private var modo: ModoCaptura
     @Query(sort: \Cliente.ordem) private var clientes: [Cliente]
     @State private var notaCriada: Nota?
+    /// Só pra redesenhar o botão de alarme depois do toque
+    @State private var alarmeMudou = false
     @Environment(\.dismiss) private var fechar
     @Environment(\.modelContext) private var ctx
     @State private var voz = Voz()
@@ -253,6 +255,25 @@ struct CapturaView: View {
                                 .foregroundStyle(Color.texto2)
                         }
                         Spacer()
+                        if t.temHora {
+                            Button {
+                                t.tocarAlarme.toggle()
+                                try? ctx.save()
+                                Notificacoes.reagendar(ctx)
+                                Haptico.leve()
+                                alarmeMudou.toggle()
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Image(systemName: t.tocarAlarme ? "alarm.fill" : "bell.slash.fill")
+                                        .font(.system(size: 16))
+                                    Text(t.tocarAlarme ? "Alarme" : "Só aviso")
+                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                }
+                                .foregroundStyle(t.tocarAlarme ? Color.verde : Color.texto2)
+                                .frame(width: 58)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .cartao(12)
                 }

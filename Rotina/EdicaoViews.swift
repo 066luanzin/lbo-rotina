@@ -101,6 +101,7 @@ struct EditarTarefaView: View {
     @State private var quando = Date.now
     @State private var repeticao = Repeticao.nunca
     @State private var dias: Set<Int> = [2, 3, 4, 5, 6]
+    @State private var tocarAlarme = true
 
     var body: some View {
         NavigationStack {
@@ -116,6 +117,15 @@ struct EditarTarefaView: View {
                         Toggle("Horário com alerta", isOn: $temHora.animation())
                         if temHora {
                             DatePicker("Hora", selection: $quando, displayedComponents: .hourAndMinute)
+                            Toggle(isOn: $tocarAlarme) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Tocar alarme")
+                                    Text(tocarAlarme ? "Toca igual despertador, mesmo no silencioso" : "Só notificação (respeita o silencioso)")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.texto2)
+                                }
+                            }
+                            .tint(Color.verde)
                         }
                         Picker("Repetir", selection: $repeticao) {
                             ForEach(Repeticao.allCases, id: \.self) { Text($0.nome).tag($0) }
@@ -170,6 +180,7 @@ struct EditarTarefaView: View {
                 quando = tarefa.quando ?? .now
                 repeticao = tarefa.repeticao
                 if tarefa.repeticao == .dias { dias = Set(tarefa.dias) }
+                tocarAlarme = tarefa.tocarAlarme
             }
         }
         .presentationDetents([.medium, .large])
@@ -188,6 +199,7 @@ struct EditarTarefaView: View {
         t.titulo = titulo.trimmingCharacters(in: .whitespaces)
         t.quando = data
         t.temHora = temData && temHora
+        t.tocarAlarme = tocarAlarme
         t.repeticao = temData ? repeticao : .nunca
         if t.repeticao == .dias {
             if dias.isEmpty { t.repeticao = .nunca } else { t.dias = Array(dias) }

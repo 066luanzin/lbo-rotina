@@ -60,6 +60,8 @@ final class Tarefa {
     var criadaEm: Date = Date.now
     /// Próximo passo de um cliente ("" = tarefa comum)
     var cliente: String = ""
+    /// Toca alarme de verdade na hora (false = só notificação)
+    var tocarAlarme: Bool = true
 
     init(titulo: String, quando: Date?, temHora: Bool, repeticao: Repeticao = .nunca) {
         self.titulo = titulo

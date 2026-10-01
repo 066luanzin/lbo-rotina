@@ -559,7 +559,7 @@ struct LinhaTarefa: View {
                     .lineLimit(2)
                 HStack(spacing: 4) {
                     if let h = tarefa.horaTexto {
-                        Image(systemName: "bell.fill").font(.system(size: 10))
+                        Image(systemName: tarefa.tocarAlarme ? "alarm.fill" : "bell.fill").font(.system(size: 10))
                         Text(h)
                     }
                     if tarefa.repeticao != .nunca {

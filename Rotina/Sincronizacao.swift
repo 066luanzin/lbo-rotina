@@ -85,6 +85,7 @@ enum Sincronizacao {
             var texto: String?          // nota
             var tipoNota: String?       // nota | ideia
             var bloco: String?          // checkin: parte do nome do bloco
+            var alarme: Bool?           // tarefa: false = só notificação
         }
         var pedidos: [Pedido]
     }
@@ -128,6 +129,7 @@ enum Sincronizacao {
             }
             let salvo = Aplicador.salvar(r, ctx: ctx)
             if !cliente.isEmpty { salvo.tarefas.forEach { $0.cliente = cliente } }
+            if let a = p.alarme { salvo.tarefas.forEach { $0.tocarAlarme = a } }
         case "nota":
             let texto = p.texto ?? p.fala ?? ""
             guard !texto.isEmpty else { return }
